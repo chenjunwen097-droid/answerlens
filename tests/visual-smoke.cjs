@@ -4,6 +4,14 @@ const { chromium } = require("playwright");
 
 let browser;
 
+// The product animates its own DOM, so anything that measures the page waits
+// for the motion layer to report that the screen has settled.
+async function settle(page) {
+  await page.evaluate(() =>
+    window.AnswerLensMotion ? window.AnswerLensMotion.whenIdle() : Promise.resolve()
+  );
+}
+
 async function confirmQuestionReview(page, firstQuestion) {
   await page.waitForSelector('#questionEditorList textarea:not([disabled])');
   const count = await page.locator("#questionEditorList textarea").count();
@@ -73,6 +81,20 @@ async function confirmQuestionReview(page, firstQuestion) {
   if (initialUi.quotaText !== "今日免费额度 6/6 次") {
     throw new Error(`Daily free quota is not six runs: ${initialUi.quotaText}`);
   }
+  const motionUi = await page.evaluate(() => ({
+    ...window.AnswerLensMotion.config(),
+    flag: document.documentElement.dataset.motion,
+    library: typeof window.anime
+  }));
+  if (
+    motionUi.engine !== "anime" ||
+    motionUi.active !== true ||
+    motionUi.flag !== "on" ||
+    motionUi.library !== "object"
+  ) {
+    throw new Error(`Motion layer is not wired up: ${JSON.stringify(motionUi)}`);
+  }
+  await settle(page);
   if (initialUi.formUploadCount !== 0 || initialUi.chatImageCount !== 1) {
     throw new Error("Image input is not scoped to the AI assistant");
   }
@@ -162,6 +184,7 @@ async function confirmQuestionReview(page, firstQuestion) {
       )}`
     );
   }
+  await settle(page);
   await page.screenshot({
     path: path.join(__dirname, "..", "qa", "ui", "desktop.png"),
     fullPage: true
@@ -702,6 +725,7 @@ async function confirmQuestionReview(page, firstQuestion) {
 
   await page.click("#chatToggle");
   await page.waitForSelector("#chatPanel:not([hidden])");
+  await settle(page);
   const desktopChat = await page.evaluate(() => {
     const panel = document.querySelector("#chatPanel").getBoundingClientRect();
     return { width: panel.width, height: panel.height };
@@ -907,6 +931,7 @@ async function confirmQuestionReview(page, firstQuestion) {
   // none of it is touched by the analysis flow.
   await page.click("#chatToggle");
   await page.waitForSelector("#chatPanel:not([hidden])");
+  await settle(page);
   await page.click("#toggleConversations");
   const conversationUi = await page.evaluate(() => ({
     drawerVisible: !document.querySelector("#chatConversations").hidden,
@@ -1207,6 +1232,42 @@ async function confirmQuestionReview(page, firstQuestion) {
     throw new Error("Re-test did not use the edited questions");
   }
 
+  // Motion: the score lands exactly on the model's value, the comparison bars
+  // grow from zero, and the module switch is scoped to the report panel.
+  const motionPlay = await page.evaluate(async () => {
+    const report = window.VisibilityCore.buildReport("小米", ["Apple", "华为"]);
+    window.answerLensQA.renderReport(report);
+    const fills = [...document.querySelectorAll("#competitorChart .bar-fill")];
+    const widest = fills.reduce(
+      (best, node) =>
+        parseFloat(node.dataset.value) > parseFloat(best ? best.dataset.value : "0") ? node : best,
+      null
+    );
+    const startedAt = widest ? widest.style.getPropertyValue("--value").trim() : "";
+    await window.AnswerLensMotion.whenIdle();
+    return {
+      target: String(Math.round(report.score)),
+      settled: document.querySelector("#scoreValue").textContent.trim(),
+      barStartedAt: startedAt,
+      barTarget: widest ? widest.dataset.value : "",
+      barSettled: widest ? widest.style.getPropertyValue("--value").trim() : "",
+      ring: document.querySelector("#scoreRing").style.background,
+      viewTransitionName: getComputedStyle(
+        document.querySelector("#report .report-panel.is-active")
+      ).viewTransitionName
+    };
+  });
+  if (
+    motionPlay.barStartedAt !== "0%" ||
+    !motionPlay.barTarget ||
+    motionPlay.barSettled !== motionPlay.barTarget ||
+    motionPlay.settled !== motionPlay.target ||
+    !motionPlay.ring.includes(`${motionPlay.target}%`) ||
+    motionPlay.viewTransitionName !== "report-panel"
+  ) {
+    throw new Error(`Motion does not settle on the real values: ${JSON.stringify(motionPlay)}`);
+  }
+
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
@@ -1270,6 +1331,37 @@ async function confirmQuestionReview(page, firstQuestion) {
   await page.locator(".form-actions").screenshot({
     path: path.join(__dirname, "..", "qa", "ui", "quota-exhausted.png")
   });
+
+  // Reduced motion: the same screens, none of the movement.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  await page.waitForSelector("#workspace");
+  const reducedUi = await page.evaluate(async () => {
+    const config = window.AnswerLensMotion.config();
+    document.querySelector("#chatToggle").click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const panel = document.querySelector("#chatPanel");
+    return {
+      reduced: config.reduced,
+      active: config.active,
+      flag: document.documentElement.dataset.motion,
+      visibleImmediately: !panel.hidden,
+      opacity: getComputedStyle(panel).opacity,
+      leftovers: document.querySelectorAll(".motion-enter").length,
+      inlineStyles: panel.style.cssText.includes("opacity")
+    };
+  });
+  if (
+    !reducedUi.reduced ||
+    reducedUi.active ||
+    reducedUi.flag !== "off" ||
+    !reducedUi.visibleImmediately ||
+    reducedUi.opacity !== "1" ||
+    reducedUi.leftovers !== 0 ||
+    reducedUi.inlineStyles
+  ) {
+    throw new Error(`Reduced motion is not honoured: ${JSON.stringify(reducedUi)}`);
+  }
 
   if (errors.length) throw new Error(`Browser errors: ${errors.join(" | ")}`);
 

@@ -82,8 +82,9 @@ AnswerLens 把这件事变成一次**可复现的检测**：让两个真实大�
 
 | 层 | 选型 | 说明 |
 | --- | --- | --- |
-| 前端 | 原生 HTML / CSS / JavaScript | 零构建、零框架，只有一个 vendored 图标库（lucide，MIT） |
+| 前端 | 原生 HTML / CSS / JavaScript | 零构建、零框架；只 vendored 两个库，lucide（图标）和 anime.js（动效），都是 MIT |
 | 后端 | Vercel Functions（Node，CommonJS） | 无数据库；共享逻辑在 [api/_lib](api/_lib) |
+| 动效 | [`app-motion.js`](app-motion.js) + View Transitions API | 所有时长和缓动集中在一张场景表里，统一尊重 `prefers-reduced-motion` |
 | 被测模型 | DeepSeek Flash、智谱 GLM 4.6v | 两个模型各答 6 题；GLM 同时负责图片识别 |
 | Judge | DeepSeek Flash | temperature 0，逐条判定，输出结构化 JSON |
 | 助手 | DeepSeek Flash | 只读工具 + 页面操作 + 联网搜索 |
@@ -165,6 +166,10 @@ Open `index.html` directly to click through the product in mock mode. Real model
 ### How it works
 
 Questions → 12 real answers → per-answer judging (temperature 0, structured JSON) → report. Nothing is pre-generated: every number in the report traces back to a model answer, and anything that cannot be judged is shown as `-` instead of a made-up value.
+
+### Motion
+
+Every animation lives in [`app-motion.js`](app-motion.js): anime.js drives the staggered reveals, numbers are tweened on `requestAnimationFrame`, module switches use the View Transitions API, and `prefers-reduced-motion` turns all of it off from one place.
 
 ### Known limitations
 

@@ -1,5 +1,33 @@
 (function () {
   const core = window.VisibilityCore;
+  // Every animation goes through the motion layer so timing stays consistent and
+  // `prefers-reduced-motion` is honoured. If the layer is missing, this shim
+  // keeps the page fully usable.
+  const motion = window.AnswerLensMotion || {
+    init: () => ({ ready: true, reduced: true, engine: "none", active: false }),
+    config: () => ({ ready: true, reduced: true, engine: "none", active: false }),
+    isOpen: (el) => Boolean(el) && !el.hidden,
+    reveal: (el) => {
+      if (el) el.hidden = false;
+    },
+    hide: (el) => {
+      if (el) el.hidden = true;
+    },
+    stagger: () => {},
+    tween: (from, to, scenario, onUpdate) => {
+      if (typeof onUpdate === "function") onUpdate(to);
+    },
+    countUp: (el, from, to) => {
+      if (el) el.textContent = String(Math.round(to));
+    },
+    playBars: () => {},
+    swap: (mutate) => {
+      if (typeof mutate === "function") mutate();
+      return Promise.resolve();
+    },
+    whenIdle: () => Promise.resolve()
+  };
+  const motionState = motion.init();
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -148,6 +176,7 @@
         `
       )
       .join("");
+    motion.stagger(elements.timeline, ".timeline-item", "timeline");
   }
 
   function renderScoringStandard(report) {
@@ -335,10 +364,12 @@
     $(".report-topline p").textContent = `检测完成于 ${new Date().toLocaleDateString("zh-CN")} · ${
       report.isReal ? "真实模型数据" : "本地模拟数据"
     } · ${report.modelStats?.length || 2} 个模型`;
-    elements.scoreValue.textContent = score;
-    elements.scoreRing.style.background = `conic-gradient(var(--orange) 0 ${
-      scoreAvailable ? score : 0
-    }%, #ddd8d0 ${scoreAvailable ? score : 0}% 100%)`;
+    // One tween drives both the ring and the number so they cannot drift apart.
+    const scoreTarget = scoreAvailable ? Number(score) : 0;
+    motion.tween(0, scoreTarget, "score", (value) => {
+      elements.scoreValue.textContent = scoreAvailable ? String(Math.round(value)) : "--";
+      elements.scoreRing.style.background = `conic-gradient(var(--orange) 0 ${value}%, #ddd8d0 ${value}% 100%)`;
+    });
     elements.scoreHeadline.textContent = !scoreAvailable
       ? "样本不足，无法给出推荐表现"
       : Number(score) >= 75
@@ -392,12 +423,13 @@
             <span>${badge}${escapeHtml(item.name)}<em class="bar-coverage">${notes.join(
               " · "
             )}</em></span>
-            <div class="bar-track"><div class="bar-fill" style="--value:${value}%"></div></div>
+            <div class="bar-track"><div class="bar-fill" data-value="${value}%" style="--value:${value}%"></div></div>
             <strong>${insufficient ? "-" : value}</strong>
           </div>
         `;
       })
       .join("");
+    motion.playBars(elements.competitorChart);
 
     const questionStats = report.questionStats || [];
     const observations = report.observations || [];
@@ -719,6 +751,13 @@
       '<li><strong>当前原始回答不足以形成可靠行动建议。</strong></li>';
 
     refreshIcons();
+    // The report arrives as one block of new DOM: stagger it in so the eye can
+    // follow the order instead of everything appearing at once.
+    motion.stagger(
+      elements.report,
+      ".score-overview, .report-block, .recommendations",
+      "blocks"
+    );
   }
 
   function escapeHtml(value) {
@@ -854,6 +893,7 @@
       : '<p class="question-review-empty">生成后可在此编辑 6 个买家问题</p>';
     updateQuestionCoverage();
     refreshIcons();
+    if (hasQuestions) motion.stagger(elements.questionEditorList, ".question-editor-row", "cards");
   }
 
   // Live coverage feedback: every question should compare the brand with a
@@ -946,7 +986,7 @@
     // The chat is not cleared here: generating questions must not touch the
     // user's conversation.
     pendingQuestions = [];
-    elements.process.hidden = false;
+    motion.reveal(elements.process, "section");
     elements.report.hidden = true;
     elements.navProcess.hidden = false;
     elements.navReport.hidden = true;
@@ -1355,7 +1395,7 @@
       elements.processStatus.innerHTML = '<span class="status-dot"></span> 分析完成';
       renderReport(report);
       attachReportToConversation(report);
-      elements.report.hidden = false;
+      motion.reveal(elements.report, "section");
       elements.navReport.hidden = false;
       // hasRun must be set before the review re-renders so the "edit and
       // re-test" entry point appears immediately.
@@ -1646,7 +1686,7 @@
       activeReport = report;
       hasRun = true;
       renderReport(report);
-      elements.report.hidden = false;
+      motion.reveal(elements.report, "section");
       elements.navReport.hidden = false;
       return;
     }
@@ -1700,6 +1740,7 @@
     }
     elements.chatMessages.appendChild(item);
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    motion.reveal(item, "message");
   }
 
   function addTemporaryChatMessage(text) {
@@ -1710,6 +1751,7 @@
     $(".chat-content", item).textContent = text;
     elements.chatMessages.appendChild(item);
     elements.chatMessages.scrollTop = elements.chatMessages.scrollHeight;
+    motion.reveal(item, "message");
     return item;
   }
 
@@ -2048,29 +2090,40 @@
     const expanded = button.getAttribute("aria-expanded") === "true";
     button.setAttribute("aria-expanded", expanded ? "false" : "true");
     button.classList.toggle("is-open", !expanded);
-    breakdown.hidden = expanded;
+    if (expanded) motion.hide(breakdown, "breakdown");
+    else motion.reveal(breakdown, "breakdown");
   });
 
   $$(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
-      $$(".tab").forEach((item) => {
-        item.classList.toggle("is-active", item === tab);
-        item.setAttribute("aria-selected", item === tab ? "true" : "false");
-      });
-      $$(".report-panel").forEach((panel) => {
-        panel.classList.toggle("is-active", panel.dataset.panel === tab.dataset.tab);
+      // The panels swap with `display`, so the View Transitions API does the
+      // cross-fade here; elsewhere the swap is instant.
+      motion.swap(() => {
+        $$(".tab").forEach((item) => {
+          item.classList.toggle("is-active", item === tab);
+          item.setAttribute("aria-selected", item === tab ? "true" : "false");
+        });
+        $$(".report-panel").forEach((panel) => {
+          panel.classList.toggle("is-active", panel.dataset.panel === tab.dataset.tab);
+        });
       });
     });
   });
 
   $("#chatToggle").addEventListener("click", () => {
-    elements.chatPanel.hidden = !elements.chatPanel.hidden;
-    if (!elements.chatPanel.hidden) $("#chatInput").focus();
+    if (motion.isOpen(elements.chatPanel)) {
+      motion.hide(elements.chatPanel, "panel");
+    } else {
+      motion.reveal(elements.chatPanel, "panel");
+      $("#chatInput").focus();
+    }
   });
 
   elements.toggleConversations.addEventListener("click", () => {
-    elements.chatConversations.hidden = !elements.chatConversations.hidden;
-    if (!elements.chatConversations.hidden) {
+    if (motion.isOpen(elements.chatConversations)) {
+      motion.hide(elements.chatConversations, "sidebar");
+    } else {
+      motion.reveal(elements.chatConversations, "sidebar");
       renderConversationList();
       elements.chatConversations.scrollTop = 0;
     }
@@ -2134,7 +2187,7 @@
   });
 
   $("#closeChat").addEventListener("click", () => {
-    elements.chatPanel.hidden = true;
+    motion.hide(elements.chatPanel, "panel");
   });
 
   $("#chatForm").addEventListener("submit", (event) => {
@@ -2156,6 +2209,8 @@
   renderScoringStandard(null);
   updateQuota();
   refreshIcons();
+  // First paint: the hero copy and the form settle in together.
+  motion.stagger(elements.workspace, ".hero-copy, .analysis-form", "blocks");
 
   // QA hook: the local mock flow never produces judge rationales, so the visual
   // smoke test renders a report that carries them through this entry point.

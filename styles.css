@@ -10,6 +10,8 @@
   --teal: #26756c;
   --red: #c44334;
   --shadow: 0 18px 50px rgba(36, 27, 20, 0.1);
+  /* Shared easing for every transition; timings live in app-motion.js. */
+  --motion-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 
 * {
@@ -3031,10 +3033,6 @@ svg {
     gap: 20px;
   }
 
-  .notes-section summary {
-    padding-right: 100px;
-  }
-
   .footer {
     padding: 24px 16px 88px;
   }
@@ -3069,6 +3067,94 @@ svg {
   .chat-messages {
     grid-column: 1;
   }
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────
+   Durations and easings live in app-motion.js; this section only describes
+   what moves and how it should look while it moves. The
+   `prefers-reduced-motion` block at the very bottom neutralises all of it. */
+
+/* Registered so the recommendation bar can grow to its width instead of
+   snapping to it. The markup already carries the final value, so the bar is
+   correct even when nothing animates. */
+@property --value {
+  syntax: "<percentage>";
+  inherits: false;
+  initial-value: 0%;
+}
+
+.bar-fill {
+  transition: --value 780ms var(--motion-ease);
+}
+
+/* Entrance used when anime.js is not loaded: the element starts in the `from`
+   state and transitions to its natural one on the next frame. */
+.motion-enter {
+  transition:
+    opacity var(--motion-dur, 420ms) var(--motion-ease) var(--motion-delay, 0ms),
+    transform var(--motion-dur, 420ms) var(--motion-ease) var(--motion-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.motion-enter.is-motion-in {
+  opacity: 0;
+  transform: var(--motion-from, translateY(16px));
+}
+
+/* Module switch: only the visible report panel cross-fades. */
+#report .report-panel.is-active {
+  view-transition-name: report-panel;
+}
+
+::view-transition-old(report-panel),
+::view-transition-new(report-panel) {
+  animation-duration: 320ms;
+  animation-timing-function: var(--motion-ease);
+}
+
+/* Press feedback: every control answers the press itself, not only its
+   eventual result. */
+.primary-button,
+.secondary-button,
+.tab,
+.icon-button,
+.text-button,
+.chat-toggle,
+.review-confirm,
+.review-regenerate,
+.chat-form button {
+  transition:
+    transform 140ms var(--motion-ease),
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+.primary-button:active,
+.secondary-button:active,
+.tab:active,
+.icon-button:active,
+.text-button:active,
+.chat-toggle:active,
+.review-confirm:active,
+.review-regenerate:active,
+.chat-form button:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* Rows react to hover and press, and the analysis steps fade between states
+   instead of jumping. */
+.conversation-item,
+.question-editor-row,
+.bar-row {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    transform 160ms var(--motion-ease);
+}
+
+.timeline-item {
+  transition: opacity 320ms var(--motion-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {

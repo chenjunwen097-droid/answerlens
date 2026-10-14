@@ -540,6 +540,63 @@ test("cleans Markdown without flattening useful line breaks", () => {
   );
 });
 
+test("keeps every animation in one table with a reduced-motion escape hatch", async () => {
+  const motion = require("../app-motion.js");
+  const scenarios = Object.keys(motion.SPEC).sort();
+  assert.deepEqual(scenarios, [
+    "blocks",
+    "breakdown",
+    "cards",
+    "message",
+    "panel",
+    "score",
+    "section",
+    "sidebar",
+    "tab",
+    "timeline"
+  ]);
+  for (const name of scenarios) {
+    const spec = motion.SPEC[name];
+    assert.ok(spec.duration > 0, `${name} has no duration`);
+    assert.equal(typeof spec.easing, "string");
+    if (spec.kind === "stagger") assert.ok(spec.stagger > 0, `${name} has no stagger step`);
+
+    // Reduced motion turns every scenario off, numbers included.
+    const reduced = motion.plan(name, { reduced: true, engine: "anime" });
+    assert.equal(reduced.skip, true, `${name} still animates with reduced motion`);
+    assert.equal(reduced.duration, 0);
+    assert.equal(reduced.stagger, 0);
+
+    // A missing animation library must degrade, never half-run.
+    assert.equal(motion.plan(name, { reduced: false, engine: "none" }).skip, true);
+
+    // A normal run keeps the table's timing.
+    const normal = motion.plan(name, { reduced: false, engine: "anime" });
+    assert.equal(normal.skip, false);
+    assert.equal(normal.duration, spec.duration);
+  }
+
+  // An unknown scenario falls back instead of throwing.
+  assert.equal(motion.plan("does-not-exist", { engine: "anime" }).scenario, "section");
+  assert.equal(motion.detectEngine({}), "none");
+  assert.equal(motion.detectEngine({ anime: { animate() {} } }), "anime");
+  assert.equal(motion.prefersReducedMotion(() => ({ matches: true })), true);
+  assert.equal(motion.prefersReducedMotion(() => ({ matches: false })), false);
+  assert.equal(motion.prefersReducedMotion(null), false);
+  // Without a DOM the layer still resolves instead of hanging.
+  await motion.whenIdle();
+
+  // The vendored library is the version the layer was written against.
+  const anime = await readFile(new URL("../vendor/anime.min.js", import.meta.url), "utf8");
+  assert.match(anime, /version:"4\.0\.2"/);
+  const license = await readFile(
+    new URL("../vendor/anime-license.txt", import.meta.url),
+    "utf8"
+  );
+  assert.match(license, /anime\.js/);
+  assert.match(license, /MIT License/);
+});
+
 test("formats the flat daily quota", () => {
   assert.equal(core.quotaLabel(6), "今日免费额度 6/6 次");
   assert.equal(core.quotaLabel(2), "今日免费额度 2/6 次");
@@ -735,4 +792,38 @@ test("contains the complete prototype workflow without remote dependencies", asy
   assert.match(styles, /\.answer-grid \{[\s\S]*?grid-template-columns: 1fr;[\s\S]*?gap: 24px/);
   assert.match(styles, /\.notes-steps \{/);
   assert.match(styles, /\.notes-scoring \{/);
+
+  // Motion: one layer, loaded before the app, with a CSS-only fallback.
+  assert.match(html, /vendor\/anime\.min\.js/);
+  assert.match(html, /app-motion\.js/);
+  assert.ok(
+    html.indexOf("vendor/anime.min.js") < html.indexOf("app-motion.js"),
+    "anime.js must load before the motion layer"
+  );
+  assert.ok(
+    html.indexOf("app-motion.js") < html.indexOf("./app.js"),
+    "the motion layer must load before the app"
+  );
+  assert.match(app, /window\.AnswerLensMotion \|\| \{/);
+  assert.match(app, /motion\.reveal\(elements\.process, "section"\)/);
+  assert.match(app, /motion\.reveal\(elements\.report, "section"\)/);
+  assert.match(app, /motion\.hide\(elements\.chatPanel, "panel"\)/);
+  assert.match(app, /motion\.isOpen\(elements\.chatPanel\)/);
+  assert.match(app, /motion\.isOpen\(elements\.chatConversations\)/);
+  assert.match(app, /motion\.swap\(/);
+  assert.match(app, /motion\.reveal\(item, "message"\)/);
+  assert.match(app, /motion\.reveal\(breakdown, "breakdown"\)/);
+  assert.match(app, /motion\.stagger\(elements\.timeline, "\.timeline-item", "timeline"\)/);
+  assert.match(app, /motion\.playBars\(elements\.competitorChart\)/);
+  assert.match(app, /motion\.tween\(0, scoreTarget, "score"/);
+  assert.match(app, /data-value="\$\{value\}%"/);
+  assert.match(styles, /--motion-ease: cubic-bezier/);
+  assert.match(styles, /@property --value \{[\s\S]*?syntax: "<percentage>"/);
+  assert.match(styles, /\.bar-fill \{[\s\S]*?transition: --value 780ms/);
+  assert.match(styles, /\.motion-enter\.is-motion-in/);
+  assert.match(styles, /#report \.report-panel\.is-active \{[\s\S]*?view-transition-name: report-panel/);
+  assert.match(styles, /::view-transition-new\(report-panel\)/);
+  assert.match(styles, /\.primary-button:active,/);
+  assert.match(styles, /translateY\(1px\) scale\(0\.98\)/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });
