@@ -6,7 +6,7 @@
 
 [在线体验](https://answerlens-dev.vercel.app) · [工作原理](#工作原理) · [评分口径](#评分口径) · [本地运行](#本地运行) · [自己部署一份](#自己部署一份)
 
-![AnswerLens 全流程：检测工作台 → 分析过程 → 检测报告 → 提问明细](docs/images/overview.png)
+
 
 </div>
 
