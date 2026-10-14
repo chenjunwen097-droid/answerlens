@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "functions": {
+    "api/analyze.js": {
+      "maxDuration": 60
+    },
+    "api/agent.js": {
+      "maxDuration": 30
+    },
+    "api/health.js": {
+      "maxDuration": 20
+    },
+    "api/search-probe.js": {
+      "maxDuration": 30
+    },
+    "api/extract-image.js": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "answerlens",
+  "version": "1.0.0",
+  "description": "AnswerLens · AI 推荐情报 — see how two real LLMs understand, compare and recommend your product",
+  "license": "MIT",
+  "author": "chenjunwen097-droid <2700235989@qq.com>",
+  "homepage": "https://answerlens-dev.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chenjunwen097-droid/answerlens.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chenjunwen097-droid/answerlens/issues"
+  },
+  "keywords": [
+    "ai-visibility",
+    "geo",
+    "llm-as-a-judge",
+    "answer-engine-optimization",
+    "brand-monitoring",
+    "deepseek",
+    "glm",
+    "vercel"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test tests/app.test.mjs tests/api.test.mjs",
+    "test:visual": "node tests/visual-smoke.cjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.57.0"
+  }
+}

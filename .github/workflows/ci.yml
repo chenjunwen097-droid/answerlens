@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # The unit tests have no runtime dependencies, so this job needs no install step.
+      - name: Run unit tests
+        run: npm test
+
+  visual:
+    name: Visual smoke (advisory)
+    runs-on: ubuntu-latest
+    # The smoke test asserts real layout metrics, and CI renders with a different
+    # font stack than a normal desktop. It is useful signal, not a hard gate.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:visual

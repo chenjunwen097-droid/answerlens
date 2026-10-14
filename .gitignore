@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# local environment and secrets
+.env
+.env.local
+.env*
+!.env.example
+
+# hosting provider metadata
+.vercel
+
+# test output: `npm run test:visual` regenerates these screenshots
+qa/
+
+# editor and OS noise
+.DS_Store
+Thumbs.db
+*.log
