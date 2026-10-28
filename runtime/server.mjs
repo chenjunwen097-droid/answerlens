@@ -5,7 +5,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import { chatReply, runPipeline } from "./pipeline.mjs";
+import { runPipeline } from "./pipeline.mjs";
+import { agentReply } from "./agents.mjs";
 
 const require = createRequire(import.meta.url);
 const PORT = Number(process.env.PORT || 8787);
@@ -141,7 +142,7 @@ const server = http.createServer(async (request, response) => {
     }
     if (url.pathname === "/v1/chat" && request.method === "POST") {
       const body = await readBody(request);
-      const text = await chatReply({ message: body.message, report: body.report });
+      const text = await agentReply({ message: body.message, report: body.report });
       const send = sse(response);
       for (const part of chunks(text)) {
         send({ type: "token", text: part });

@@ -467,3 +467,5 @@ run.error        { stage, retryable, message }
 - 部署注意：单次真实分析约 2 分钟；Vercel Hobby 函数上限 60 秒，需要 Vercel Pro（300 秒）或让前端直连常驻运行时。
 - **v2 已上线**：Vercel 项目 `answerlens-v2`，Root Directory=`v2`，生产地址 https://answerlens-v2.vercel.app 。运行时地址与 token 已写入 Production/Preview 环境变量。并发优化后一次真实分析实测 **46 秒**，在 Hobby 的 60 秒上限内。
 - 中国网络访问 `*.vercel.app` 仍需代理；如需免代理链接，按 M3 后的域名/部署方案处理。
+- **M3（行为层）已上线**：runtime 新增 `agents.mjs`，实现 Orchestrator → Researcher（真实 DeepSeek Search + 摘要）→ Report Agent（报告内问答 + 可联网核验）三角色工具循环；每次回答都是真实模型调用。线上实测联网问答 6 秒。
+- dsh 本体尚未挂载：dsh 的 `sdk` profile 是 stdio JSON-RPC 的编码 agent（文件工具、present 等），要把搜索/报告工具接进去需要写 Cordis 插件；这是 M3.1 的工作。

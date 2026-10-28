@@ -3,7 +3,7 @@
 FROM docker.m.daocloud.io/library/node:22-alpine
 
 WORKDIR /app
-COPY package.json server.mjs pipeline.mjs ./
+COPY package.json server.mjs pipeline.mjs agents.mjs ./
 
 ENV NODE_ENV=production
 EXPOSE 8787

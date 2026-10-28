@@ -123,6 +123,10 @@ async function search(query, count = 5) {
     }));
 }
 
+export async function webSearch(query, count = 5) {
+  return search(query, count);
+}
+
 function stage(index) {
   return { type: "stage", stage: STAGES[index].stage, label: STAGES[index].label, index, total: STAGES.length };
 }
