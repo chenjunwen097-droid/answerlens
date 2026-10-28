@@ -25,7 +25,7 @@ try {
     if (message.type() === "error") errors.push(message.text());
   });
 
-  await page.goto(base, { waitUntil: "networkidle" });
+  await page.goto(base, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".empty-state");
   assert((await page.locator("#input").count()) === 1, "composer is missing");
 
@@ -53,7 +53,7 @@ try {
   await page.getByRole("tab", { name: "提问明细" }).click();
   assert((await page.locator(".detail-item").count()) === 6, "detail list missing");
 
-  await page.goto(`${base}/reports`, { waitUntil: "networkidle" });
+  await page.goto(`${base}/reports`, { waitUntil: "domcontentloaded" });
   const cards = await page.locator(".report-card").count();
   assert(cards >= 6, `library is missing reports: ${cards}`);
   await page.locator(".segmented button").nth(1).click();
