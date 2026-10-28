@@ -131,6 +131,8 @@ npm run test:visual   # 需要先执行 npx playwright install chromium
 - [ ] 支持更多被测模型 / 用户自带模型
 - [ ] judge 与被测模型解耦，并用人工标注样本校准
 
+详细的技术实现方案（架构、数据模型、逐页规格、里程碑与验收标准）见 [docs/technical-plan.md](docs/technical-plan.md)。
+
 ## 贡献
 
 欢迎 PR。提交前请先读 [CONTRIBUTING.md](CONTRIBUTING.md)——本项目要求贡献者同意 CLA。
