@@ -459,4 +459,6 @@ run.error        { stage, retryable, message }
 - 运行时：深圳 ECS `47.115.148.30`，Docker 容器 `answerlens-runtime`，宿主端口 80 → 容器 8787，Bearer token 鉴权，SQLite 持久化在 `/opt/answerlens-runtime/data`。
 - 前端：本地 `v2` 已通过 `AGENT_RUNTIME_URL` 连到该运行时（`/api/health` 显示 `runtime: remote`）。
 - 旧 `visiblegrow-searxng` / `visiblegrow-search-gateway` 容器已停止（未删除）；`cowagent` 未改动。
-- 待办：模型 key 填入运行时 env、Supabase 或改用运行时 SQLite、Vercel 部署（Root Directory=`v2`）。
+- 模型 key 已配置到运行时 env（DeepSeek + GLM，未启用 Serper）；`/health` 的 `deepseek/glm/search` 均为 `true`。
+- v2 的 `/api/health` 已透传运行时状态。
+- 待办：运行时里的真实流水线（M2）、dsh agents（M3）、Vercel 部署（Root Directory=`v2`）。

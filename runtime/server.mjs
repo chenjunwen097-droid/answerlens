@@ -174,7 +174,8 @@ const server = http.createServer(async (request, response) => {
         models: {
           deepseek: Boolean(process.env.DEEPSEEK_API_KEY),
           glm: Boolean(process.env.GLM_API_KEY),
-          search: Boolean(process.env.SEARCH_API_KEY)
+          // DeepSeek Search runs on the DeepSeek key; Serper is only a fallback.
+          search: Boolean(process.env.DEEPSEEK_API_KEY || process.env.SEARCH_API_KEY)
         }
       })
     );
