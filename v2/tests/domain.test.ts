@@ -32,9 +32,9 @@ describe("report domain", () => {
 });
 
 describe("runtime and providers", () => {
-  it("falls back to the mock runtime when no dsh URL is configured", () => {
+  it("requires a runtime URL instead of falling back to mock data", () => {
     delete process.env.AGENT_RUNTIME_URL;
-    expect(getRuntime().name).toBe("mock");
+    expect(() => getRuntime()).toThrow(/AGENT_RUNTIME_URL/);
   });
 
   it("does not report a search provider without keys", () => {

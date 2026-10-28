@@ -18,7 +18,7 @@ try {
 
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
-  page.setDefaultTimeout(15000);
+  page.setDefaultTimeout(240000);
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
@@ -36,7 +36,7 @@ try {
   assert((await page.locator(".msg.is-user").count()) === 1, "user message missing");
 
   await page.locator(".msg-card button").click();
-  await page.waitForURL(/\/reports\/[^/]+/, { timeout: 30000 });
+  await page.waitForURL(/\/reports\/[^/]+/, { timeout: 300000 });
   await page.waitForSelector(".report-view");
   await page.waitForTimeout(1200);
   assert((await page.locator("#input").count()) === 1, "composer disappeared on the report page");
@@ -68,7 +68,7 @@ try {
   await page.waitForFunction(
     () => document.querySelectorAll(".artifact-msg").length >= 2 && !document.body.innerText.includes("正在查看"),
     null,
-    { timeout: 15000 }
+    { timeout: 60000 }
   );
   assert((await page.locator(".artifact").isVisible()), "report chat panel missing");
 

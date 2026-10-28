@@ -1,6 +1,6 @@
 # AnswerLens v2
 
-Next.js 版的产品外壳（M0/M1）。当前默认使用确定性 mock runtime，因此**不需要任何 key 就能跑通整条交互**。
+Next.js 版的产品外壳（M0/M1）。后端是 `runtime/` 的真实分析服务，需要模型 key；**没有 mock 模式**。
 
 ```bash
 cd v2
@@ -16,14 +16,13 @@ npm run dev
 | `/` | 对话 / 新检测 |
 | `/reports` | 报告库 |
 | `/reports/[id]` | 报告详情（总览 / 提问明细） |
-| `/api/chat` | SSE 对话（mock 或代理到 dsh） |
-| `/api/runs` | SSE 检测流水线（mock 或代理到 dsh） |
+| `/api/chat` | SSE 对话（代理到常驻运行时，真实模型） |
+| `/api/runs` | SSE 检测流水线（真实问题/回答/判定/报告） |
 | `/api/health` | 上游配置探活 |
 
 ## 运行模式
 
-- **mock（默认）**：`AGENT_RUNTIME_URL` 为空，`lib/runtime.ts` 用确定性数据模拟 6 个阶段。
-- **remote**：设置 `AGENT_RUNTIME_URL` 指向 `runtime/` 服务（当前部署在 47.115.148.30:80）；需要同时设置 `AGENT_RUNTIME_TOKEN`。
+- **remote（唯一模式）**：`AGENT_RUNTIME_URL` 指向 `runtime/` 服务（当前部署在 47.115.148.30:80），同时设置 `AGENT_RUNTIME_TOKEN`；未配置会直接报错，不提供 mock 数据。
 - **真实搜索**：`lib/search.ts` 已实现 DeepSeek Search/Fetch（主）与 Serper（兜底），配置 key 后即可用。
 - **Supabase**：`sql/schema.sql` 是 v2.1 的数据表；v2.0 报告存在 localStorage。
 

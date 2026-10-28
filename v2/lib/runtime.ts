@@ -1,4 +1,3 @@
-import { buildReport } from "./data";
 import type { ChatBlock, Report, RunStageEvent } from "./types";
 
 export const STAGES = [
@@ -28,60 +27,9 @@ export type RunEvent =
   | { type: "error"; message: string; retryable: boolean };
 
 export interface AgentRuntime {
-  readonly name: "mock" | "remote";
+  readonly name: "remote";
   chat(input: { scope: unknown; message: string; report?: Report | null }): AsyncGenerator<ChatEvent>;
   run(input: { brief: Brief; reportId: string }): AsyncGenerator<RunEvent>;
-}
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-class MockRuntime implements AgentRuntime {
-  readonly name = "mock" as const;
-
-  async *chat(input: { scope: unknown; message: string; report?: Report | null }): AsyncGenerator<ChatEvent> {
-    const report = input.report;
-    const text = report
-      ? `这份报告里，${report.brand} 的第 ${
-          report.questions.reduce((best, item, index) => (item.score > report.questions[best].score ? index : best), 0) + 1
-        } 题表现最好。所有数字都来自报告中的逐条判定，没有重新生成。`
-      : "我先按这个方案准备：会先联网核对型号与背景，再生成 6 个买家问题。问题可以编辑，确认后才会真正开始模型测试。";
-    for (const chunk of text.match(/.{1,12}/g) || [text]) {
-      yield { type: "token", text: chunk };
-      await sleep(24);
-    }
-    yield {
-      type: "blocks",
-      blocks: report
-        ? [{ type: "text", text: "需要我把这道题的原始回答调出来对照吗？" }]
-        : [
-            {
-              type: "plan",
-              title: "准备开始检测",
-              lines: ["预计耗时 3–5 分钟", "会消耗 1 次免费额度"],
-              action: { key: "start-analysis", label: "开始检测" }
-            }
-          ]
-    };
-    yield { type: "done" };
-  }
-
-  async *run(input: { brief: Brief; reportId: string }): AsyncGenerator<RunEvent> {
-    for (let index = 0; index < STAGES.length; index += 1) {
-      const stage = STAGES[index];
-      yield { type: "stage", stage: stage.stage, label: stage.label, index, total: STAGES.length };
-      await sleep(650);
-    }
-    yield {
-      type: "report",
-      report: buildReport({
-        id: input.reportId,
-        brand: input.brief.brand,
-        product: input.brief.product,
-        competitors: input.brief.competitors,
-        score: input.brief.score ?? 66
-      })
-    };
-  }
 }
 
 /**
@@ -105,7 +53,7 @@ class RemoteRuntime implements AgentRuntime {
           : {})
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(180_000)
+      signal: AbortSignal.timeout(280_000)
     });
     if (!response.ok || !response.body) throw new Error(`runtime ${pathname} failed: ${response.status}`);
     const reader = response.body.getReader();
@@ -155,5 +103,6 @@ class RemoteRuntime implements AgentRuntime {
 
 export function getRuntime(): AgentRuntime {
   const url = process.env.AGENT_RUNTIME_URL;
-  return url ? new RemoteRuntime(url) : new MockRuntime();
+  if (!url) throw new Error("AGENT_RUNTIME_URL 未配置：v2 不提供 mock 数据，请连接真实运行时");
+  return new RemoteRuntime(url);
 }

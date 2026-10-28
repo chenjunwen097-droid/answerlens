@@ -461,4 +461,7 @@ run.error        { stage, retryable, message }
 - 旧 `visiblegrow-searxng` / `visiblegrow-search-gateway` 容器已停止（未删除）；`cowagent` 未改动。
 - 模型 key 已配置到运行时 env（DeepSeek + GLM，未启用 Serper）；`/health` 的 `deepseek/glm/search` 均为 `true`。
 - v2 的 `/api/health` 已透传运行时状态。
-- 待办：运行时里的真实流水线（M2）、dsh agents（M3）、Vercel 部署（Root Directory=`v2`）。
+- **M2 已完成**：运行时执行真实调用（问题生成 → 12 条回答 → 12 条判定 → 评分 → 报告）。DeepSeek 请求带 `thinking: { type: "disabled" }` 关闭推理（沿用 v1），问题生成复用 v1 的配方与覆盖校验；搜索走 DeepSeek Search。全链路实测 105–111 秒。
+- v2 已移除 mock runtime：未配置 `AGENT_RUNTIME_URL` 会直接报错。
+- 待办：dsh agents（M3）、Vercel 部署（Root Directory=`v2`）。
+- 部署注意：单次真实分析约 2 分钟；Vercel Hobby 函数上限 60 秒，需要 Vercel Pro（300 秒）或让前端直连常驻运行时。
