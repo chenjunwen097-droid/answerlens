@@ -28,7 +28,7 @@ export type RunEvent =
   | { type: "error"; message: string; retryable: boolean };
 
 export interface AgentRuntime {
-  readonly name: "mock" | "dsh";
+  readonly name: "mock" | "remote";
   chat(input: { scope: unknown; message: string; report?: Report | null }): AsyncGenerator<ChatEvent>;
   run(input: { brief: Brief; reportId: string }): AsyncGenerator<RunEvent>;
 }
@@ -85,20 +85,18 @@ class MockRuntime implements AgentRuntime {
 }
 
 /**
- * Adapter for the dsh `sdk` profile.
+ * Adapter for the remote runtime service.
  *
  * The runtime is a separate long-lived Node service (Vercel cannot host it).
- * The contract below is intentionally thin: one JSON-RPC call per streamed
- * turn, newline-delimited JSON frames back. Align the method names with the
- * pinned @deepseek-ai/dsh version and cover them with contract tests before
- * switching `AGENT_RUNTIME_URL` on.
+ * It currently runs the deterministic pipeline and will host the dsh agents
+ * behind the same SSE contract. One POST per turn, `data: {...}` frames back.
  */
-class DshRuntime implements AgentRuntime {
-  readonly name = "dsh" as const;
+class RemoteRuntime implements AgentRuntime {
+  readonly name = "remote" as const;
   constructor(private readonly baseUrl: string) {}
 
-  private async *stream(method: string, params: unknown): AsyncGenerator<Record<string, unknown>> {
-    const response = await fetch(`${this.baseUrl}/rpc`, {
+  private async *stream(pathname: string, payload: unknown): AsyncGenerator<Record<string, unknown>> {
+    const response = await fetch(`${this.baseUrl}${pathname}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -106,10 +104,10 @@ class DshRuntime implements AgentRuntime {
           ? { authorization: `Bearer ${process.env.AGENT_RUNTIME_TOKEN}` }
           : {})
       },
-      body: JSON.stringify({ jsonrpc: "2.0", id: crypto.randomUUID(), method, params }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(180_000)
     });
-    if (!response.ok || !response.body) throw new Error(`runtime ${method} failed: ${response.status}`);
+    if (!response.ok || !response.body) throw new Error(`runtime ${pathname} failed: ${response.status}`);
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -117,27 +115,28 @@ class DshRuntime implements AgentRuntime {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
-      let newline = buffer.indexOf("\n");
-      while (newline >= 0) {
-        const line = buffer.slice(0, newline).trim();
-        buffer = buffer.slice(newline + 1);
-        if (line) yield JSON.parse(line) as Record<string, unknown>;
-        newline = buffer.indexOf("\n");
+      let split = buffer.indexOf("\n\n");
+      while (split >= 0) {
+        const chunk = buffer.slice(0, split);
+        buffer = buffer.slice(split + 2);
+        const line = chunk.split("\n").find((item) => item.startsWith("data: "));
+        if (line) yield JSON.parse(line.slice(6)) as Record<string, unknown>;
+        split = buffer.indexOf("\n\n");
       }
     }
   }
 
   async *chat(input: { scope: unknown; message: string; report?: Report | null }): AsyncGenerator<ChatEvent> {
-    for await (const frame of this.stream("agent.chat", input)) {
-      if (frame.method === "chat.token") yield { type: "token", text: String(frame.text || "") };
-      if (frame.method === "chat.blocks") yield { type: "blocks", blocks: (frame.blocks || []) as ChatBlock[] };
-      if (frame.method === "chat.done") yield { type: "done" };
+    for await (const frame of this.stream("/v1/chat", input)) {
+      if (frame.type === "token") yield { type: "token", text: String(frame.text || "") };
+      if (frame.type === "blocks") yield { type: "blocks", blocks: (frame.blocks || []) as ChatBlock[] };
+      if (frame.type === "done") yield { type: "done" };
     }
   }
 
   async *run(input: { brief: Brief; reportId: string }): AsyncGenerator<RunEvent> {
-    for await (const frame of this.stream("agent.run", input)) {
-      if (frame.method === "run.stage") {
+    for await (const frame of this.stream("/v1/runs", input)) {
+      if (frame.type === "stage") {
         yield {
           type: "stage",
           stage: String(frame.stage),
@@ -146,8 +145,8 @@ class DshRuntime implements AgentRuntime {
           total: Number(frame.total)
         };
       }
-      if (frame.method === "report.ready") yield { type: "report", report: frame.report as Report };
-      if (frame.method === "run.error") {
+      if (frame.type === "report") yield { type: "report", report: frame.report as Report };
+      if (frame.type === "error") {
         yield { type: "error", message: String(frame.message), retryable: Boolean(frame.retryable) };
       }
     }
@@ -156,5 +155,5 @@ class DshRuntime implements AgentRuntime {
 
 export function getRuntime(): AgentRuntime {
   const url = process.env.AGENT_RUNTIME_URL;
-  return url ? new DshRuntime(url) : new MockRuntime();
+  return url ? new RemoteRuntime(url) : new MockRuntime();
 }

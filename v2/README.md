@@ -23,9 +23,19 @@ npm run dev
 ## 运行模式
 
 - **mock（默认）**：`AGENT_RUNTIME_URL` 为空，`lib/runtime.ts` 用确定性数据模拟 6 个阶段。
-- **dsh**：设置 `AGENT_RUNTIME_URL` 指向常驻的 dsh `sdk` profile 服务。
+- **remote**：设置 `AGENT_RUNTIME_URL` 指向 `runtime/` 服务（当前部署在 47.115.148.30:80）；需要同时设置 `AGENT_RUNTIME_TOKEN`。
 - **真实搜索**：`lib/search.ts` 已实现 DeepSeek Search/Fetch（主）与 Serper（兜底），配置 key 后即可用。
 - **Supabase**：`sql/schema.sql` 是 v2.1 的数据表；v2.0 报告存在 localStorage。
+
+本地 `.env.local`（已 gitignore）示例：
+
+```
+AGENT_RUNTIME_URL=http://47.115.148.30
+AGENT_RUNTIME_TOKEN=<runtime token>
+```
+
+ECS 上旧的 SearXNG / Caddy 网关容器已 `docker stop`（容器保留），80 端口现在由
+`answerlens-runtime` 使用；`cowagent` 未受影响。
 
 ## 部署
 
