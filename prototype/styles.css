@@ -56,9 +56,9 @@ kbd {
   overflow: hidden;
 }
 
-.app.has-artifact { grid-template-columns: 280px minmax(0, 1fr) 420px; }
+.app.has-artifact { grid-template-columns: 280px minmax(0, 1fr) 280px; }
 .app.rail-collapsed { grid-template-columns: 76px minmax(0, 1fr); }
-.app.rail-collapsed.has-artifact { grid-template-columns: 76px minmax(0, 1fr) 420px; }
+.app.rail-collapsed.has-artifact { grid-template-columns: 76px minmax(0, 1fr) 280px; }
 
 /* ── Rail ─────────────────────────────────────────────────────────────── */
 .rail {
@@ -232,6 +232,8 @@ kbd {
   background: var(--white);
   font-size: 12px;
   font-weight: 650;
+  white-space: nowrap;
+  flex: 0 0 auto;
   transition: border-color 160ms ease, color 160ms ease, transform 120ms var(--ease);
 }
 .ghost-btn:hover { color: var(--ink); border-color: var(--line-strong); }
@@ -451,6 +453,8 @@ kbd {
   font-size: 12px;
   font-weight: 700;
   box-shadow: 0 8px 18px rgba(242, 103, 34, 0.22);
+  white-space: nowrap;
+  flex: 0 0 auto;
   transition: background-color 160ms ease, transform 120ms var(--ease);
 }
 .primary-btn:hover { background: var(--orange-dark); border-color: var(--orange-dark); }
@@ -480,12 +484,15 @@ kbd {
 
 /* ── Report ───────────────────────────────────────────────────────────── */
 .report-view { padding: 22px clamp(24px, 5vw, 64px) 60px; overflow-y: auto; }
-.report-head { max-width: 980px; margin: 0 auto 16px; display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
+.report-head { max-width: 980px; margin: 0 auto 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+.report-head-main { min-width: 0; }
 .back-btn { margin-bottom: 14px; padding: 0; display: inline-flex; align-items: center; gap: 6px; border: 0; color: var(--muted); background: transparent; font-size: 11px; font-weight: 700; }
 .back-btn:hover { color: var(--ink); }
-.report-head h2 { margin: 0; font-family: Georgia, "Songti SC", serif; font-size: clamp(26px, 3vw, 38px); font-weight: 500; }
+.report-head h2 { margin: 0; font-family: Georgia, "Songti SC", serif; font-size: clamp(26px, 3vw, 38px); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.report-head .eyebrow { margin-bottom: 8px; font-size: 13px; }
 .report-meta { margin: 8px 0 0; color: var(--faint); font-size: 11px; }
-.report-head-actions { display: flex; gap: 8px; }
+.report-head-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.report-exit { border-color: var(--line); background: var(--white); }
 .report-tabs { max-width: 980px; margin: 0 auto 14px; display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
 .report-tabs button { padding: 10px 12px; border: 0; border-bottom: 2px solid transparent; color: var(--muted); background: transparent; font-size: 12px; font-weight: 700; }
 .report-tabs button.is-active { color: var(--ink); border-color: var(--orange); }
@@ -569,7 +576,8 @@ kbd {
 .artifact-list { display: grid; gap: 6px; }
 .artifact-list button { padding: 9px 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--white); font-size: 11px; text-align: left; }
 .artifact-list button:hover { border-color: var(--orange); }
-.artifact-list span { color: var(--faint); font-size: 10px; }
+.artifact-list span { min-width: 0; overflow: hidden; color: var(--faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-hint { margin: 12px 0 0; padding: 10px 12px; border-radius: 8px; color: var(--faint); background: var(--surface); font-size: 10px; line-height: 1.6; }
 .artifact-kicker { margin: 4px 0 2px; color: var(--faint); font-size: 10px; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
 
 .artifact-chat { display: grid; gap: 12px; }
@@ -615,7 +623,7 @@ kbd {
 /* ── Responsive ───────────────────────────────────────────────────────── */
 @media (max-width: 1180px) {
   .app.has-artifact { grid-template-columns: 280px minmax(0, 1fr); }
-  .artifact { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(420px, 92vw); box-shadow: var(--shadow-lg); }
+  .artifact { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; width: min(320px, 92vw); box-shadow: var(--shadow-lg); }
 }
 
 @media (max-width: 860px) {
@@ -626,6 +634,9 @@ kbd {
   .suggestions { grid-template-columns: 1fr; }
   .mini-reports { grid-template-columns: 1fr; }
   .view-head { flex-direction: column; align-items: flex-start; }
+  .report-head { flex-direction: column; align-items: stretch; }
+  .report-head-actions { order: -1; justify-content: flex-end; }
+  .report-head h2 { font-size: 24px; }
   .split { grid-template-columns: 1fr; }
   .score-card { grid-template-columns: 1fr; justify-items: center; text-align: center; }
   .metric-row { justify-content: center; }

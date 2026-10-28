@@ -153,10 +153,6 @@
           <section class="report-view" id="reportView" hidden>
             <header class="report-head">
               <div class="report-head-main">
-                <button class="back-btn" id="reportBack" type="button">
-                  <i data-lucide="arrow-left"></i>
-                  <span>报告库</span>
-                </button>
                 <p class="eyebrow" id="reportEyebrow">检测报告</p>
                 <h2 id="reportTitle">小米 14 的 AI 推荐情报</h2>
                 <p class="report-meta" id="reportMeta">2026-10-28 · 2 个模型 · 6 个问题 · v1</p>
@@ -164,6 +160,9 @@
               <div class="report-head-actions">
                 <button class="ghost-btn" type="button"><i data-lucide="download"></i><span>导出</span></button>
                 <button class="primary-btn" id="reportRerun" type="button"><i data-lucide="refresh-cw"></i><span>重跑</span></button>
+                <button class="icon-btn report-exit" id="reportBack" type="button" aria-label="退出报告" title="退出报告">
+                  <i data-lucide="x"></i>
+                </button>
               </div>
             </header>
 

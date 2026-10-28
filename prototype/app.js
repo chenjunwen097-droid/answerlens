@@ -403,7 +403,6 @@
         <p class="artifact-kicker">报告已生成</p>
         <div class="artifact-list">
           <button type="button" data-report-open="${report.id}">查看完整报告 <span>6 题 · 12 答</span></button>
-          <button type="button" data-report-detail="${report.id}">提问明细 <span>逐条判定</span></button>
         </div>
       </div>`;
     $("#artifactTitle").textContent = "报告摘要";
@@ -438,22 +437,14 @@
   function renderReportAside(report) {
     return `
       <div class="artifact-report">
-        <button class="ghost-btn" type="button" data-report-chat="${report.id}" style="width:100%;justify-content:center">
-          <i data-lucide="message-circle"></i> 报告对话 <span style="margin-left:auto;font-size:10px;color:var(--faint)">${
-            reportThread(report.id).length
-          } 条</span>
-        </button>
-        <p class="artifact-kicker">目录</p>
-        <div class="artifact-list">
-          <button type="button" data-report-tab="overview">总览 <span>分数与建议</span></button>
-          <button type="button" data-report-tab="detail">提问明细 <span>${report.questions.length} 题</span></button>
-        </div>
         <p class="artifact-kicker">元数据</p>
         <div class="artifact-list">
           <button type="button" disabled>模型 <span>DeepSeek Flash · GLM 4.6v</span></button>
           <button type="button" disabled>版本 <span>v${report.version}</span></button>
           <button type="button" disabled>检测时间 <span>${report.date}</span></button>
+          <button type="button" disabled>问题 <span>${report.questions.length} 题 · 12 条回答</span></button>
         </div>
+        <p class="artifact-hint">在下方输入框直接提问这份报告。</p>
       </div>`;
   }
 
@@ -469,7 +460,7 @@
       `<div class="artifact-chat">
         <div class="artifact-chat-head">
           <span>${escapeHtml(report.product || report.brand)} · v${report.version}</span>
-          <button class="link-btn" type="button" data-report-tab="detail">查看提问明细</button>
+          <button class="link-btn" type="button" data-report-exit>返回报告</button>
         </div>
         <div class="artifact-chat-list">
           ${
@@ -764,6 +755,13 @@
       if (tab) {
         if (state.view !== "report") openReport(state.activeReportId);
         switchReportTab(tab.dataset.reportTab);
+        return;
+      }
+      const exitChat = event.target.closest("[data-report-exit]");
+      if (exitChat) {
+        const report = activeReport();
+        if (report) openArtifact("报告信息", renderReportAside(report));
+        else closeArtifact();
         return;
       }
       const reportChat = event.target.closest("[data-report-chat]");

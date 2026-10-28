@@ -61,6 +61,25 @@ let browser;
   const score = Number(await page.locator("#reportScore").innerText());
   assert(score > 0 && score <= 100, `score did not animate to a real value: ${score}`);
   assert((await page.locator("#reportBars .bar-row").count()) === 3, "competitor bars did not render");
+  const reportChrome = await page.evaluate(() => {
+    const head = document.querySelector(".report-head").getBoundingClientRect();
+    const exit = document.querySelector("#reportBack").getBoundingClientRect();
+    const exportButton = document.querySelector(".report-head-actions .ghost-btn").getBoundingClientRect();
+    const rerun = document.querySelector("#reportRerun").getBoundingClientRect();
+    const artifact = document.querySelector("#artifact").getBoundingClientRect();
+    const title = document.querySelector("#reportTitle").getBoundingClientRect();
+    return {
+      exitAtRight: head.right - exit.right < 40,
+      exportSingleLine: exportButton.height < 44,
+      rerunSingleLine: rerun.height < 44,
+      artifactWidth: Math.round(artifact.width),
+      titleSingleLine: title.height < 60
+    };
+  });
+  assert(reportChrome.exitAtRight, "report exit is not in the top-right corner");
+  assert(reportChrome.exportSingleLine && reportChrome.rerunSingleLine, "export/rerun labels wrap vertically");
+  assert(reportChrome.artifactWidth >= 270 && reportChrome.artifactWidth <= 290, `artifact is not compressed: ${reportChrome.artifactWidth}`);
+  assert(reportChrome.titleSingleLine, "report title wraps onto more than one line");
   await page.screenshot({ path: path.join(qaDir, "04-report.png") });
 
   // Report detail tab.
@@ -90,7 +109,13 @@ let browser;
     null,
     { timeout: 6000 }
   );
+  assert((await page.locator("#artifactBody [data-report-exit]").count()) === 1, "report chat has no exit");
+  assert((await page.locator('#artifactBody [data-report-tab="detail"]').count()) === 0, "report chat still duplicates the detail entry");
   await page.screenshot({ path: path.join(qaDir, "07-report-chat.png") });
+  await page.click("[data-report-exit]");
+  await page.waitForFunction(
+    () => document.querySelector("#artifactTitle").textContent.trim() === "报告信息"
+  );
 
   // Command palette.
   await page.keyboard.press("Control+k");
