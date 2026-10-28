@@ -38,7 +38,8 @@ ECS 上旧的 SearXNG / Caddy 网关容器已 `docker stop`（容器保留），
 
 ## 部署
 
-- Vercel：项目 Root Directory 设为 `v2`。
+- Vercel：项目 `answerlens-v2`，Root Directory 设为 `v2`；生产地址 https://answerlens-v2.vercel.app
+- 环境变量（Production + Preview）：`AGENT_RUNTIME_URL=http://47.115.148.30`、`AGENT_RUNTIME_TOKEN=<runtime token>`
 - dsh 运行时：单独部署到常驻 Node 主机（香港/新加坡 VPS），把地址填进 `AGENT_RUNTIME_URL`。
 - 国内访问：Vercel 域名仍可能不可达，发布前需按 `docs/technical-plan.md` 的部署方案处理。
 

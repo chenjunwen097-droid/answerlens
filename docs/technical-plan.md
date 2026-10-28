@@ -465,3 +465,5 @@ run.error        { stage, retryable, message }
 - v2 已移除 mock runtime：未配置 `AGENT_RUNTIME_URL` 会直接报错。
 - 待办：dsh agents（M3）、Vercel 部署（Root Directory=`v2`）。
 - 部署注意：单次真实分析约 2 分钟；Vercel Hobby 函数上限 60 秒，需要 Vercel Pro（300 秒）或让前端直连常驻运行时。
+- **v2 已上线**：Vercel 项目 `answerlens-v2`，Root Directory=`v2`，生产地址 https://answerlens-v2.vercel.app 。运行时地址与 token 已写入 Production/Preview 环境变量。并发优化后一次真实分析实测 **46 秒**，在 Hobby 的 60 秒上限内。
+- 中国网络访问 `*.vercel.app` 仍需代理；如需免代理链接，按 M3 后的域名/部署方案处理。

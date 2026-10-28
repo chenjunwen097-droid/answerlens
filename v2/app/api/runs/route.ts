@@ -2,6 +2,7 @@ import { getRuntime, type Brief } from "@/lib/runtime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const body = (await request.json()) as { brief?: Brief; reportId?: string };

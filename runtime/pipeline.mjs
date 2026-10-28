@@ -87,7 +87,15 @@ async function glm(messages, { temperature = 0.4, maxTokens = 400 } = {}) {
   if (!GLM_KEY) throw new Error("GLM_API_KEY 未配置");
   const payload = await postJson(
     `${GLM_BASE}/chat/completions`,
-    { model: GLM_MODEL, messages, temperature, max_tokens: maxTokens },
+    {
+      model: GLM_MODEL,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+      // GLM 4.6v also spends its budget on hidden reasoning; the tested answers
+      // need visible content, so disable thinking like the DeepSeek calls.
+      thinking: { type: "disabled" }
+    },
     { authorization: `Bearer ${GLM_KEY}` }
   );
   const text = payload.choices?.[0]?.message?.content || "";
@@ -125,14 +133,11 @@ async function researchBrief(brief) {
     `${brief.brand} ${product} 产品 参数 定位`.trim(),
     ...brief.competitors.slice(0, 2).map((name) => `${name} 产品 参数 定位`)
   ];
-  const sources = [];
-  for (const query of queries) {
-    try {
-      sources.push(...(await search(query, 4)));
-    } catch {
-      // A failed search is a fact, not a blocker: the prompt below will say so.
-    }
-  }
+  const batches = await Promise.all(
+    queries.map((query) => search(query, 4).catch(() => []))
+  );
+  // A failed search is a fact, not a blocker: the prompt below will say so.
+  const sources = batches.flat();
   const seen = new Set();
   const unique = sources.filter((item) => {
     if (!item.url || seen.has(item.url)) return false;
@@ -153,14 +158,24 @@ function questionProblems(questions, brief) {
   // Models freely vary spacing ("华为 Mate 70" vs "华为Mate 70"), so compare
   // names with whitespace removed, the same way the v1 validator did.
   const compact = (value) => String(value || "").toLowerCase().replace(/\s+/g, "");
+  const aliases = (value) => {
+    const set = new Set([compact(value)]);
+    const firstWord = String(value || "").split(/[\s·]+/)[0];
+    if (compact(firstWord).length >= 2) set.add(compact(firstWord));
+    // Chinese brand names are usually the first two characters
+    // ("库迪生椰拿铁" → "库迪", "华为 Mate 70" → "华为").
+    if (/^[\u4e00-\u9fa5]{2,}/.test(String(value || ""))) set.add(String(value).slice(0, 2));
+    return [...set];
+  };
+  const matches = (text, name) => aliases(name).some((alias) => text.includes(alias));
   for (const question of questions) {
     const text = compact(question);
-    if (!brief.brand || !text.includes(compact(brief.brand))) return `问题缺少品牌：${question}`;
-    if (!brief.competitors.some((name) => text.includes(compact(name)))) return `问题缺少竞品：${question}`;
+    if (!brief.brand || !matches(text, brief.brand)) return `问题缺少品牌：${question}`;
+    if (!brief.competitors.some((name) => matches(text, name))) return `问题缺少竞品：${question}`;
   }
   if (new Set(questions).size !== 6) return "问题重复";
   for (const competitor of brief.competitors) {
-    const count = questions.filter((question) => compact(question).includes(compact(competitor))).length;
+    const count = questions.filter((question) => matches(compact(question), competitor)).length;
     if (count < 3) return `竞品 ${competitor} 只出现在 ${count} 题，至少需要 3 题`;
   }
   return "";
@@ -260,14 +275,21 @@ function scoreEntity(entity) {
 }
 
 async function judgeAnswer({ question, answer, brief }) {
+  const aliasLabel = (value) => {
+    const set = new Set([String(value)]);
+    const firstWord = String(value || "").split(/[\s·]+/)[0];
+    if (firstWord.length >= 2) set.add(firstWord);
+    if (/^[\u4e00-\u9fa5]{2,}/.test(String(value || ""))) set.add(String(value).slice(0, 2));
+    return [...set].join(" / ");
+  };
   const entities = [
     {
       id: "brand",
       // The answer often writes the model name ("小米 14") instead of the bare
       // brand ("小米"); both must count as the same object.
-      name: brief.product ? `${brief.brand}（${brief.product}）` : brief.brand
+      name: aliasLabel(brief.product ? `${brief.brand} ${brief.product}` : brief.brand)
     },
-    ...brief.competitors.map((name, index) => ({ id: `competitor_${index + 1}`, name }))
+    ...brief.competitors.map((name, index) => ({ id: `competitor_${index + 1}`, name: aliasLabel(name) }))
   ];
   const prompt = `逐条判定下面这条 AI 回答，只依据回答原文，不补充外部知识。
 问题：${question}
@@ -474,26 +496,70 @@ export async function* runPipeline({ brief, reportId }) {
 
   yield stage(3);
   const answered = [];
-  for (const provider of ["deepseek", "glm"]) {
-    for (let index = 0; index < questions.length; index += 1) {
-      checkBudget();
-      const text = await answerWith(provider, questions[index], normalized);
-      answered.push({ provider, questionIndex: index, text });
-      yield { type: "answer.progress", provider, done: index + 1, total: questions.length };
+  {
+    const tasks = ["deepseek", "glm"].flatMap((provider) =>
+      questions.map((_, index) => ({ provider, index }))
+    );
+    let cursor = 0;
+    let finished = 0;
+    const queue = [];
+    const worker = async () => {
+      for (;;) {
+        const task = tasks[cursor];
+        cursor += 1;
+        if (!task) return;
+        checkBudget();
+        const text = await answerWith(task.provider, questions[task.index], normalized);
+        answered.push({ provider: task.provider, questionIndex: task.index, text });
+        queue.push({ provider: task.provider });
+        finished += 1;
+      }
+    };
+    const running = Promise.all(Array.from({ length: 6 }, () => worker())).catch((error) => {
+      throw error;
+    });
+    while (finished < tasks.length) {
+      while (queue.length) {
+        const item = queue.shift();
+        yield {
+          type: "answer.progress",
+          provider: item.provider,
+          done: finished,
+          total: tasks.length
+        };
+      }
+      await new Promise((resolve) => setTimeout(resolve, 120));
     }
+    await running;
   }
 
   yield stage(4);
   const judged = [];
-  for (const answer of answered) {
-    checkBudget();
-    const verdict = await judgeAnswer({
-      question: questions[answer.questionIndex],
-      answer: answer.text,
-      brief: normalized
-    });
-    judged.push({ questionIndex: answer.questionIndex, provider: answer.provider, entities: verdict.entities });
-    yield { type: "judge.progress", done: judged.length, total: answered.length };
+  {
+    let cursor = 0;
+    let finished = 0;
+    const worker = async () => {
+      for (;;) {
+        const answer = answered[cursor];
+        cursor += 1;
+        if (!answer) return;
+        checkBudget();
+        const verdict = await judgeAnswer({
+          question: questions[answer.questionIndex],
+          answer: answer.text,
+          brief: normalized
+        });
+        judged.push({ questionIndex: answer.questionIndex, provider: answer.provider, entities: verdict.entities });
+        finished += 1;
+      }
+    };
+    const running = Promise.all(Array.from({ length: 6 }, () => worker()));
+    while (finished < answered.length) {
+      yield { type: "judge.progress", done: finished, total: answered.length };
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    await running;
+    yield { type: "judge.progress", done: answered.length, total: answered.length };
   }
 
   yield stage(5);
