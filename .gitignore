@@ -12,6 +12,7 @@ node_modules/
 
 # test output: `npm run test:visual` regenerates these screenshots
 qa/
+prototype/qa/
 
 # editor and OS noise
 .DS_Store

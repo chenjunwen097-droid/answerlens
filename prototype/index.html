@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AnswerLens · 新版交互原型</title>
+    <meta name="description" content="AnswerLens 新版交互原型：chat-first、单一输入框、报告库与 artifact 面板" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <aside class="rail" id="rail">
+        <div class="rail-head">
+          <a class="brand" href="#" aria-label="AnswerLens">
+            <span class="brand-mark">A</span>
+            <span class="brand-text">
+              <strong>AnswerLens</strong>
+              <small>AI 推荐情报</small>
+            </span>
+          </a>
+          <button class="icon-btn" id="collapseRail" aria-label="收起侧栏" title="收起侧栏">
+            <i data-lucide="panel-left-close"></i>
+          </button>
+        </div>
+
+        <button class="new-chat" id="newChat" type="button">
+          <i data-lucide="square-pen"></i>
+          <span>新建对话</span>
+          <kbd>⌘K</kbd>
+        </button>
+
+        <nav class="rail-nav" aria-label="主导航">
+          <button class="rail-item is-active" data-view="chat" type="button">
+            <i data-lucide="message-square-text"></i>
+            <span>会话</span>
+          </button>
+          <button class="rail-item" data-view="library" type="button">
+            <i data-lucide="library"></i>
+            <span>报告库</span>
+            <em id="reportCount">12</em>
+          </button>
+          <button class="rail-item" data-view="brands" type="button">
+            <i data-lucide="tags"></i>
+            <span>品牌与竞品</span>
+          </button>
+        </nav>
+
+        <div class="rail-recent">
+          <p class="rail-label">最近</p>
+          <button class="recent-item is-active" type="button">
+            <span>小米 14 vs iPhone 17 Pro</span>
+            <small>刚刚</small>
+          </button>
+          <button class="recent-item" type="button">
+            <span>瑞幸 vs 库迪：生椰拿铁</span>
+            <small>昨天</small>
+          </button>
+          <button class="recent-item" type="button">
+            <span>喜茶 vs 林里：清爽果茶</span>
+            <small>10 月 24 日</small>
+          </button>
+        </div>
+
+        <div class="rail-foot">
+          <span class="avatar">陈</span>
+          <div>
+            <strong>陈俊文</strong>
+            <small>个人空间</small>
+          </div>
+          <button class="icon-btn" type="button" aria-label="设置" title="设置">
+            <i data-lucide="settings"></i>
+          </button>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="crumbs" id="crumbs">
+            <span>会话</span>
+            <i data-lucide="chevron-right"></i>
+            <strong>新对话</strong>
+          </div>
+          <div class="top-actions">
+            <button class="icon-btn" id="openPalette" type="button" aria-label="搜索" title="搜索">
+              <i data-lucide="search"></i>
+            </button>
+            <button class="ghost-btn" id="shareBtn" type="button">
+              <i data-lucide="share-2"></i>
+              <span>分享</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="stage">
+          <div class="stage-body">
+          <section class="chat-view" id="chatView">
+            <div class="chat-scroll" id="chatScroll">
+              <div class="empty-state" id="emptyState">
+                <p class="eyebrow"><i data-lucide="sparkles"></i> AI 推荐情报</p>
+                <h1>让 AI 告诉你，<br />它怎么推荐你的产品</h1>
+                <p class="lede">
+                  描述你的产品、型号和竞品，或者直接问一个关于报告的问题。剩下的交给 AnswerLens。
+                </p>
+                <div class="suggestions" id="suggestions">
+                  <button type="button" data-prompt="对比小米 14 和 iPhone 17 Pro 在屏幕体验上的差异，重点看护眼和户外亮度">
+                    <i data-lucide="smartphone"></i>
+                    <span>对比小米 14 和 iPhone 17 Pro 的屏幕体验</span>
+                  </button>
+                  <button type="button" data-prompt="分析瑞幸和库迪的生椰拿铁，在口感和性价比上用户会怎么选">
+                    <i data-lucide="coffee"></i>
+                    <span>瑞幸和库迪的生椰拿铁，用户会怎么选</span>
+                  </button>
+                  <button type="button" data-prompt="帮我看看喜茶和林里在清爽果茶这个场景里的 AI 推荐表现">
+                    <i data-lucide="cup-soda"></i>
+                    <span>喜茶和林里在清爽果茶里的推荐表现</span>
+                  </button>
+                </div>
+                <div class="recent-strip">
+                  <div class="recent-strip-head">
+                    <span>最近报告</span>
+                    <button class="link-btn" id="openLibraryFromEmpty" type="button">全部报告 <i data-lucide="arrow-right"></i></button>
+                  </div>
+                  <div class="mini-reports" id="miniReports"></div>
+                </div>
+              </div>
+              <div class="thread" id="thread" hidden></div>
+            </div>
+
+          </section>
+
+          <section class="library-view" id="libraryView" hidden>
+            <header class="view-head">
+              <div>
+                <p class="eyebrow"><i data-lucide="library"></i> 报告库</p>
+                <h2>你的 AI 推荐情报</h2>
+                <p class="lede">所有检测结果都在这里，可以回看、对比、继续追问。</p>
+              </div>
+              <div class="view-actions">
+                <div class="segmented" id="libraryFilter">
+                  <button class="is-active" data-filter="all" type="button">全部</button>
+                  <button data-filter="high" type="button">≥70</button>
+                  <button data-filter="low" type="button">&lt;70</button>
+                </div>
+                <button class="primary-btn" id="libraryNewChat" type="button">
+                  <i data-lucide="plus"></i>
+                  <span>新建检测</span>
+                </button>
+              </div>
+            </header>
+            <div class="report-grid" id="reportGrid"></div>
+          </section>
+
+          <section class="report-view" id="reportView" hidden>
+            <header class="report-head">
+              <div class="report-head-main">
+                <button class="back-btn" id="reportBack" type="button">
+                  <i data-lucide="arrow-left"></i>
+                  <span>报告库</span>
+                </button>
+                <p class="eyebrow" id="reportEyebrow">检测报告</p>
+                <h2 id="reportTitle">小米 14 的 AI 推荐情报</h2>
+                <p class="report-meta" id="reportMeta">2026-10-28 · 2 个模型 · 6 个问题 · v1</p>
+              </div>
+              <div class="report-head-actions">
+                <button class="ghost-btn" type="button"><i data-lucide="download"></i><span>导出</span></button>
+                <button class="primary-btn" id="reportRerun" type="button"><i data-lucide="refresh-cw"></i><span>重跑</span></button>
+              </div>
+            </header>
+
+            <div class="report-tabs" role="tablist" id="reportTabs">
+              <button class="is-active" data-tab="overview" role="tab" type="button">总览</button>
+              <button data-tab="detail" role="tab" type="button">提问明细</button>
+            </div>
+
+            <div class="report-panel" data-panel="overview">
+              <section class="score-card">
+                <div class="score-ring" id="reportScoreRing"><div><strong id="reportScore">--</strong><span>/ 100</span></div></div>
+                <div class="score-copy">
+                  <p class="kicker">AI 推荐表现</p>
+                  <h3 id="reportHeadline">AI 能理解产品，但推荐理由还不够稳定</h3>
+                  <p id="reportSummary">小米 14 的 AI 推荐表现平均分为 72/100，共分析 6 个决策问题和 12 条真实回答。</p>
+                  <div class="metric-row">
+                    <div><span>主动推荐率</span><strong>67%</strong></div>
+                    <div><span>首选率</span><strong>33%</strong></div>
+                    <div><span>样本</span><strong>12</strong></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="block">
+                <div class="block-head"><p class="kicker">竞品对比</p><h3>AI 对产品和竞品的推荐差异</h3></div>
+                <div class="bars" id="reportBars"></div>
+              </section>
+
+              <div class="split">
+                <section class="block">
+                  <div class="block-head"><p class="kicker">定位判断</p><h3>AI 如何理解你的产品</h3></div>
+                  <div class="positioning" id="reportPositioning"></div>
+                </section>
+                <section class="block">
+                  <div class="block-head"><p class="kicker">行动建议</p><h3>最值得做的 3 件事</h3></div>
+                  <ol class="actions" id="reportActions"></ol>
+                </section>
+              </div>
+            </div>
+
+            <div class="report-panel" data-panel="detail" hidden>
+              <div class="detail-list" id="reportDetail"></div>
+            </div>
+          </section>
+          </div>
+
+          <div class="composer-wrap">
+            <form class="composer" id="composer">
+              <div class="composer-top">
+                <button class="scope-chip" id="scopeChip" type="button" aria-haspopup="menu" aria-expanded="false">
+                  <i data-lucide="message-circle"></i>
+                  <span id="scopeLabel">新对话</span>
+                  <i data-lucide="chevron-down" class="chev"></i>
+                </button>
+                <span class="composer-hint" id="composerHint">Enter 发送 · Shift+Enter 换行</span>
+              </div>
+              <div class="composer-row">
+                <button class="icon-btn" type="button" aria-label="添加图片" title="添加图片">
+                  <i data-lucide="image-plus"></i>
+                </button>
+                <textarea id="input" rows="1" placeholder="描述你的产品和竞品，或直接问一个关于报告的问题…"></textarea>
+                <button class="send-btn" type="submit" id="sendBtn" aria-label="发送">
+                  <i data-lucide="arrow-up"></i>
+                </button>
+              </div>
+              <div class="scope-menu" id="scopeMenu" hidden role="menu"></div>
+            </form>
+            <p class="disclaimer">AI 可能出错，报告中的每条结论都可以追溯到原始回答。</p>
+          </div>
+        </div>
+      </main>
+
+      <aside class="artifact" id="artifact" hidden aria-label="上下文面板">
+        <header class="artifact-head">
+          <div class="artifact-title">
+            <i data-lucide="panel-right"></i>
+            <strong id="artifactTitle">分析进度</strong>
+          </div>
+          <button class="icon-btn" id="closeArtifact" type="button" aria-label="关闭面板">
+            <i data-lucide="x"></i>
+          </button>
+        </header>
+        <div class="artifact-body" id="artifactBody"></div>
+      </aside>
+    </div>
+
+    <div class="palette" id="palette" hidden>
+      <div class="palette-shell">
+        <div class="palette-input">
+          <i data-lucide="search"></i>
+          <input id="paletteInput" type="text" placeholder="搜索对话、报告或操作…" />
+          <kbd>Esc</kbd>
+        </div>
+        <div class="palette-list" id="paletteList"></div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="../vendor/lucide.min.js"></script>
+    <script src="../vendor/anime.min.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>
