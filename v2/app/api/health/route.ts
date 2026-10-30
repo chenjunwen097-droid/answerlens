@@ -28,18 +28,12 @@ export async function GET() {
       ? {
           deepseek: Boolean(remoteModels.deepseek),
           glm: Boolean(remoteModels.glm),
-          search: Boolean(remoteModels.search),
-          supabase: Boolean(
-            process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-          )
+          search: Boolean(remoteModels.search)
         }
       : {
           deepseek: Boolean(process.env.DEEPSEEK_API_KEY),
           glm: Boolean(process.env.GLM_API_KEY),
-          search: searchConfigured(),
-          supabase: Boolean(
-            process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-          )
+          search: searchConfigured()
         },
     remote
   });

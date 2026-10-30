@@ -45,8 +45,68 @@ const TOOLS = [
         additionalProperties: false
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "prepare_analysis",
+      description:
+        "当用户明确要求检测、对比或分析产品或品牌时，从用户原话中提取结构化检测对象。只提取用户已经说出的信息，不推测或补全型号。",
+      parameters: {
+        type: "object",
+        properties: {
+          brand: { type: "string", description: "用户自己的品牌，必须出现在用户原话中" },
+          product: { type: "string", description: "用户明确说出的产品、型号或具体服务；未说则不填" },
+          competitors: {
+            type: "array",
+            minItems: 1,
+            maxItems: 3,
+            items: { type: "string" },
+            description: "用户明确说出的 1–3 个竞品，每个都必须出现在原话中"
+          }
+        },
+        required: ["brand", "competitors"],
+        additionalProperties: false
+      }
+    }
   }
 ];
+
+const compact = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[\s\-_/·,，。.!！?？:：;；"'“”‘’()（）[\]【】]/g, "");
+
+function verifiedBrief(raw, message) {
+  if (!raw || typeof raw !== "object") return null;
+  const brand = String(raw.brand || "").trim();
+  const product = String(raw.product || "").trim();
+  const competitors = [
+    ...new Set(
+      (Array.isArray(raw.competitors) ? raw.competitors : [])
+        .map((item) => String(item || "").trim())
+        .filter(Boolean)
+    )
+  ].slice(0, 3);
+  const directions = (Array.isArray(raw.directions) ? raw.directions : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const other = String(raw.other || "").trim();
+  const source = compact(message);
+  if (!brand || competitors.length === 0 || !source.includes(compact(brand))) return null;
+  if (competitors.some((item) => !source.includes(compact(item)))) return null;
+  if (product && !source.includes(compact(product))) return null;
+  if (directions.some((item) => !source.includes(compact(item)))) return null;
+  if (other && !source.includes(compact(other))) return null;
+  return {
+    brand,
+    ...(product ? { product } : {}),
+    competitors,
+    ...(directions.length ? { directions } : {}),
+    ...(other ? { other } : {})
+  };
+}
 
 async function researcher(query) {
   const results = await webSearch(query, 5);
@@ -111,16 +171,30 @@ export async function agentReply({ message, report }) {
     { role: "user", content: context ? `${context}\n\n用户问题：${message}` : String(message) }
   ];
 
-  for (let round = 0; round < 2; round += 1) {
+  let brief = null;
+  for (let round = 0; round < 3; round += 1) {
     const reply = await chat(messages, { tools: TOOLS });
     const calls = Array.isArray(reply.tool_calls) ? reply.tool_calls : [];
-    if (!calls.length) return String(reply.content || "").trim();
+    if (!calls.length) return { text: String(reply.content || "").trim(), brief };
     messages.push({ role: "assistant", content: reply.content || "", tool_calls: calls });
     for (const call of calls) {
       let result;
       try {
         const args = JSON.parse(call.function?.arguments || "{}");
-        result = await researcher(String(args.query || message));
+        if (call.function?.name === "prepare_analysis" && !report) {
+          const candidate = verifiedBrief(args, message);
+          if (candidate) {
+            brief = candidate;
+            result = { status: "prepared", brief };
+          } else {
+            result = {
+              status: "rejected",
+              reason: "品牌或竞品必须逐字来自用户原话；缺少信息时请让用户补充，不要补全。"
+            };
+          }
+        } else {
+          result = await researcher(String(args.query || message));
+        }
       } catch (error) {
         result = { brief: `检索失败：${error.message}`, sources: [] };
       }
@@ -131,5 +205,5 @@ export async function agentReply({ message, report }) {
       });
     }
   }
-  return "我查到了相关资料，但信息不够确定，暂时无法给出可靠结论。";
+  return { text: "我查到了相关资料，但信息不够确定，暂时无法给出可靠结论。", brief };
 }

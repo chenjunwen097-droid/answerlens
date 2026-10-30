@@ -1,0 +1,10 @@
+{
+  "name": "@answerlens/dsh-plugins",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./analysis-tool": "./analysis-tool.mjs",
+    "./preset-binder": "./preset-binder.mjs",
+    "./report-tools": "./report-tools.mjs"
+  }
+}

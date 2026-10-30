@@ -33,7 +33,23 @@ export interface Report {
 
 export type ChatBlock =
   | { type: "text"; text: string }
-  | { type: "plan"; title: string; lines: string[]; action?: { key: string; label: string } }
+  | {
+      type: "plan";
+      title: string;
+      lines: string[];
+      action?: {
+        key: string;
+        label: string;
+        brief?: {
+          brand: string;
+          product?: string;
+          competitors: string[];
+          directions?: string[];
+          other?: string;
+          score?: number;
+        };
+      };
+    }
   | { type: "metric"; label: string; value: string; note?: string };
 
 export interface ChatMessage {

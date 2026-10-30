@@ -1,0 +1,10 @@
+.env
+data
+node_modules
+dsh/node_modules
+dsh/.runtime-home
+dsh/.dsh-test
+dsh/probe.mjs
+dsh/raw-probe.mjs
+dsh/dump.txt
+dsh/dump2.txt

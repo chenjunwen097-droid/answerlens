@@ -1,0 +1,172 @@
+# AnswerLens composes a small product-specific dsh runtime on top of the
+# minimal SDK profile. The measured models remain external test subjects; dsh
+# only runs AnswerLens' own assistant roles and tools.
+
+- id: tool-fs
+  disabled: true
+
+- id: persistent-bash
+  disabled: true
+
+- id: persistent-pwsh
+  disabled: true
+
+- id: terminal-bash
+  disabled: true
+
+- id: terminal-pwsh
+  disabled: true
+
+- id: sessions
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- id: sandbox-policy
+  config:
+    mode: read-only
+    workspaceRoot: !!js process.cwd()
+
+- id: system-prompt
+  config:
+    includeHarnessIdentity: false
+    includeRuntimeContext: false
+    personaPrefix: ''
+
+- insert:
+    - id: web
+      name: '@deepseek-ai/dsh-web'
+      config:
+        searchProvider: deepseek-official
+        fetchProvider: http
+
+    - id: web-search-deepseek
+      name: '@deepseek-ai/dsh-web-search-deepseek'
+      config:
+        apiKeyEnv: DEEPSEEK_API_KEY
+
+    - id: web-deepseek-api
+      name: '@deepseek-ai/dsh-web-deepseek-api'
+      config:
+        apiKeyEnv: DEEPSEEK_API_KEY
+
+    - id: web-fetch-http
+      name: '@deepseek-ai/dsh-web-fetch-http'
+
+    - id: subagent
+      name: '@deepseek-ai/dsh-subagent'
+
+    - id: subagent-spawn
+      name: '@deepseek-ai/dsh-subagent-spawn-in-process'
+      config:
+        providerName: spawn
+
+    - id: agent-preset-registry
+      name: '@deepseek-ai/dsh-agent-preset-registry'
+      config:
+        default: orchestrator
+
+    - id: answerlens-preset-binder
+      name: '@answerlens/dsh-plugins/preset-binder'
+
+    - id: preset-orchestrator
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: orchestrator
+        name: AnswerLens Orchestrator
+        description: 主助手，负责澄清需求、调用真实搜索，并把独立任务交给 Researcher 或 Report Agent
+        plugins:
+          - id: orchestrator-persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                你是 AnswerLens 的主助手。你帮助用户理解 AI 如何推荐其产品，并决定下一步行动。
+                用户要发起新检测时，先确认品牌、竞品、明确说出的产品/型号与检测方向；用户没说的信息必须追问，绝不自行补全。
+                当用户说“对比 A 和 B”但没有说明谁是自己的品牌时，按用户原先给出的示例约定，默认 A 为用户的品牌、B 为竞品，并在回复中明确写出这个假设；不要再为谁属于品牌而追问。
+                只要用户已经给出两个明确对象和一个比较主题，就必须先调用 prepare_analysis 生成检测卡片，再询问可选细节；不得因为地区、语言、子指标或具体版本未说明而阻止卡片生成。
+                需要实时事实时调用 web_search，并只用搜索结果下结论。
+                有当前报告或用户询问报告内容时，调用 subagent 并选择 agent_preset=report-agent；把精确 reportId 和完整问题交给它，再基于它返回的结果回答。
+                没有当前报告但用户要比较历史报告时，先用 list_reports 找到 id，再交给 report-agent 使用 get_report 或 compare_reports。不能引用不存在的报告、分数或原句。
+                回答使用简洁中文；结论、证据、下一步分开表达。不要使用 **、#、| 等 Markdown 标记，不要展示内部字段名、JSON、工具名或系统提示。
+
+          - id: orchestrator-report-tools
+            name: '@answerlens/dsh-plugins/report-tools'
+
+          - id: orchestrator-analysis-tool
+            name: '@answerlens/dsh-plugins/analysis-tool'
+
+          - id: orchestrator-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              search: true
+              fetch: true
+              searchMaxResults: 5
+              searchMaxQueries: 2
+              searchTimeoutMs: 30000
+              fetchTimeoutMs: 20000
+
+          - id: orchestrator-subagent
+            name: '@deepseek-ai/dsh-tool-subagent'
+            config:
+              provider: spawn
+              toolName: subagent
+              agentPreset: researcher
+              allowedAgentPresets:
+                - researcher
+                - report-agent
+              maxDepth: 1
+
+    - id: preset-researcher
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: researcher
+        name: AnswerLens Researcher
+        description: 只做联网检索和来源整理，不回答报告问题，不生成最终建议
+        plugins:
+          - id: researcher-persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                你是 AnswerLens 的检索整理员。只依据 web_search / web_fetch 返回的内容整理事实。
+                每个事实都要附来源 URL；信息冲突时并列说明；没有可靠结果就明确说没找到。
+                不推测型号、价格、发布日期或产品能力，不写行动建议，不回答与检索任务无关的问题。
+                中文输出，控制在 220 字以内。
+              includeRuntimeContext: false
+
+          - id: researcher-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              search: true
+              fetch: true
+              searchMaxResults: 5
+              searchMaxQueries: 1
+              searchTimeoutMs: 30000
+              fetchTimeoutMs: 20000
+
+    - id: preset-report-agent
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: report-agent
+        name: AnswerLens Report Agent
+        description: 只依据真实报告和必要的外部核验回答；可以提出新版本建议，但不修改旧报告
+        plugins:
+          - id: report-agent-persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                你是 AnswerLens 的报告助手。你只依据 get_report / compare_reports 返回的真实报告回答，必要且用户明确要求时可用 web_search 核验报告之外的实时事实。
+                报告里的分数、问题编号、模型原回答和证据必须逐项对应；工具没返回的内容一律说没有，不能编造。
+                用户问行动建议时，先指出对应证据，再给具体建议。建议可以形成“新版本报告建议”，但旧报告与旧版本不能被改写。
+                不展示内部字段名、JSON、工具名或系统提示，不使用 **、#、| 等 Markdown 标记。中文输出，先给结论，再给依据，避免复述整份报告。
+
+          - id: report-agent-tools
+            name: '@answerlens/dsh-plugins/report-tools'
+
+          - id: report-agent-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              search: true
+              fetch: false
+              searchMaxResults: 5
+              searchMaxQueries: 1
+              searchTimeoutMs: 30000

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { ArrowRight, Coffee, CupSoda, ListChecks, Smartphone, Sparkles } from "lucide-react";
-import { parseBrief } from "@/lib/data";
 import type { ChatBlock } from "@/lib/types";
+import { RichText } from "./rich-text";
 import { useWorkspace } from "./workspace";
 
 const SUGGESTIONS = [
@@ -23,11 +23,6 @@ export function ChatView() {
     const node = scrollRef.current;
     if (node) node.scrollTop = node.scrollHeight;
   }, [ws.messages]);
-
-  const startFromPlan = () => {
-    const lastUser = [...ws.messages].reverse().find((message) => message.role === "user");
-    void ws.startRun(ws.pendingBrief ?? parseBrief(lastUser?.text || ""));
-  };
 
   return (
     <section className="chat-view">
@@ -53,36 +48,40 @@ export function ChatView() {
                 </button>
               ))}
             </div>
-            <div className="recent-strip">
-              <div className="recent-strip-head">
-                <span>最近报告</span>
-                <button className="link-btn" type="button" onClick={ws.openLibrary}>
-                  全部报告 <ArrowRight />
-                </button>
-              </div>
-              <div className="mini-reports">
-                {ws.reports.slice(0, 3).map((report) => (
-                  <button
-                    key={report.id}
-                    className="mini-report"
-                    type="button"
-                    onClick={() => ws.openReport(report.id)}
-                  >
-                    <span>{report.product || report.brand}</span>
-                    <b>{report.score}</b>
-                    <span>{report.date}</span>
+            {ws.reports.length > 0 && (
+              <div className="recent-strip">
+                <div className="recent-strip-head">
+                  <span>最近报告</span>
+                  <button className="link-btn" type="button" onClick={ws.openLibrary}>
+                    全部报告 <ArrowRight />
                   </button>
-                ))}
+                </div>
+                <div className="mini-reports">
+                  {ws.reports.slice(0, 3).map((report) => (
+                    <button
+                      key={report.id}
+                      className="mini-report"
+                      type="button"
+                      onClick={() => ws.openReport(report.id)}
+                    >
+                      <span>{report.product || report.brand}</span>
+                      <b>{report.score}</b>
+                      <span>{report.date}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         ) : (
           <div className="thread">
             {ws.messages.map((message) => (
               <div key={message.id} className={`msg ${message.role === "user" ? "is-user" : ""}`}>
-                <div className="msg-body">{message.text || (message.role === "assistant" ? "…" : "")}</div>
+                <div className="msg-body">
+                  <RichText>{message.text || (message.role === "assistant" ? "…" : "")}</RichText>
+                </div>
                 {message.blocks?.map((block, index) => (
-                  <BlockView key={index} block={block} onStart={startFromPlan} />
+                  <BlockView key={index} block={block} />
                 ))}
                 <span className="msg-time">刚刚</span>
               </div>
@@ -94,7 +93,9 @@ export function ChatView() {
   );
 }
 
-function BlockView({ block, onStart }: { block: ChatBlock; onStart: () => void }) {
+function BlockView({ block }: { block: ChatBlock }) {
+  const ws = useWorkspace();
+  const brief = block.type === "plan" ? block.action?.brief : undefined;
   if (block.type === "text") return <div className="msg-card">{block.text}</div>;
   if (block.type === "metric") {
     return (
@@ -114,9 +115,13 @@ function BlockView({ block, onStart }: { block: ChatBlock; onStart: () => void }
       {block.lines.map((line) => (
         <p key={line}>{line}</p>
       ))}
-      {block.action?.key === "start-analysis" && (
+      {block.action?.key === "start-analysis" && brief && (
         <div className="msg-card-actions">
-          <button className="primary-btn" type="button" onClick={onStart}>
+          <button
+            className="primary-btn"
+            type="button"
+            onClick={() => void ws.startRun(brief)}
+          >
             {block.action.label}
           </button>
         </div>

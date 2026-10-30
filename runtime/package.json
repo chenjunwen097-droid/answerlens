@@ -1,9 +1,10 @@
 {
   "name": "answerlens-runtime",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.5.2",
   "type": "module",
   "scripts": {
-    "start": "node --experimental-sqlite server.mjs"
+    "start": "node --experimental-sqlite server.mjs",
+    "test": "node --test dsh/client.test.mjs"
   }
 }

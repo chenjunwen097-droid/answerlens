@@ -1,17 +1,17 @@
 # AnswerLens runtime
 
 The long-lived backend that Vercel cannot host. It owns the SSE protocol, the
-SQLite store, and the seam where the DeepSeek Harness (dsh) agents will run.
+SQLite store, and the DeepSeek Harness (dsh) agent runtime.
 
 ## Deploy (Shenzhen ECS example)
 
 ```bash
 cd /opt/answerlens-runtime
 # .env: PORT, RUNTIME_TOKEN, DATA_DIR, model keys
-docker build -t answerlens-runtime:0.1.0 .
+docker build -t answerlens-runtime:0.5.2 .
 docker run -d --name answerlens-runtime --restart unless-stopped \
   -p 80:8787 --env-file .env \
-  -v /opt/answerlens-runtime/data:/data answerlens-runtime:0.1.0
+  -v /opt/answerlens-runtime/data:/data answerlens-runtime:0.5.2
 ```
 
 - The base image uses `docker.m.daocloud.io` because Docker Hub is unreachable
@@ -26,7 +26,7 @@ docker run -d --name answerlens-runtime --restart unless-stopped \
 
 | Route | Description |
 | --- | --- |
-| `GET /health` | status, storage backend, configured providers |
+| `GET /health` | version, storage backend, agent engine, configured providers |
 | `POST /v1/chat` | SSE: `token` / `blocks` / `done` |
 | `POST /v1/runs` | SSE: `stage` ×6 → `report` |
 | `GET /v1/reports` | stored reports |
@@ -34,5 +34,9 @@ docker run -d --name answerlens-runtime --restart unless-stopped \
 
 ## dsh
 
-The current pipeline is deterministic. The dsh agent runtime will be mounted
-behind the same routes; keep the SSE contract stable so Vercel never changes.
+Set `AGENT_ENGINE=dsh` to route `/v1/chat` through DeepSeek Harness. The
+deterministic analysis pipeline remains responsible for question generation,
+12 measured answers, judging and score aggregation.
+
+The dsh image is preinstalled from `dsh/package-lock.json`; runtime configuration
+lives in `dsh/patch.yml`. See [dsh/README.md](dsh/README.md).

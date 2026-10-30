@@ -1,5 +1,7 @@
 # dependencies
 node_modules/
+.runtime-home/
+.dsh-test/
 
 # local environment and secrets
 .env

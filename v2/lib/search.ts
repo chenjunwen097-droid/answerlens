@@ -1,5 +1,4 @@
-// Search layer: DeepSeek's in-house Search/Fetch API is the primary provider.
-// Serper stays behind the same interface as a fallback.
+// Search layer: DeepSeek's native Search/Fetch API is the only provider.
 export interface SearchResult {
   title: string;
   url: string;
@@ -22,7 +21,7 @@ export interface SearchOptions {
 const DEEPSEEK_BASE = process.env.DEEPSEEK_API_BASE || "https://api.deepseek.com";
 
 export function searchConfigured() {
-  return Boolean(process.env.DEEPSEEK_API_KEY || process.env.SEARCH_API_KEY);
+  return Boolean(process.env.DEEPSEEK_API_KEY);
 }
 
 export async function deepSeekSearch(
@@ -74,36 +73,8 @@ export async function deepSeekFetch(
   return { title: String(payload.title || url), markdown: String(payload.content || "") };
 }
 
-export async function serperSearch(
-  query: string,
-  count = 8,
-  fetchImpl: typeof fetch = fetch
-): Promise<SearchResult[]> {
-  const key = process.env.SEARCH_API_KEY;
-  if (!key) throw new Error("SEARCH_API_KEY is not configured");
-  const response = await fetchImpl("https://google.serper.dev/search", {
-    method: "POST",
-    headers: { "x-api-key": key, "content-type": "application/json" },
-    body: JSON.stringify({ q: query, num: count }),
-    signal: AbortSignal.timeout(20_000)
-  });
-  if (!response.ok) throw new Error(`Serper search failed: ${response.status}`);
-  const payload = (await response.json()) as { organic?: Record<string, unknown>[] };
-  return (payload.organic || []).map((item) => ({
-    title: String(item.title || ""),
-    url: String(item.link || ""),
-    snippet: String(item.snippet || ""),
-    summary: String(item.snippet || "")
-  }));
-}
-
 // Filters follow the DeepSeek guide: >=1.5 is a high-quality hit, >=3 is authoritative.
-export async function searchWithFallback(query: string, options: SearchOptions = {}) {
-  try {
-    const results = await deepSeekSearch(query, options);
-    return results.filter((item) => (item.rerankScore ?? 0) >= 1.5 || results.length <= 3);
-  } catch (error) {
-    console.warn("[search] DeepSeek failed, falling back to Serper:", (error as Error).message);
-    return serperSearch(query, options.count ?? 8);
-  }
+export async function searchWeb(query: string, options: SearchOptions = {}) {
+  const results = await deepSeekSearch(query, options);
+  return results.filter((item) => (item.rerankScore ?? 0) >= 1.5 || results.length <= 3);
 }

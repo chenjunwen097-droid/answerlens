@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { STAGES } from "@/lib/runtime";
 import type { Report } from "@/lib/types";
+import { RichText } from "./rich-text";
 import { useWorkspace } from "./workspace";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -79,7 +80,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           >
             <Library />
             <span>报告库</span>
-            <em>{ws.reports.length + 6}</em>
+            <em>{ws.reports.length}</em>
           </Link>
           <button className="rail-item" type="button" disabled title="即将推出">
             <Tags />
@@ -381,7 +382,9 @@ function ArtifactPanel() {
               {ws.messages.map((message) => (
                 <div key={message.id} className={`artifact-msg ${message.role === "user" ? "is-user" : ""}`}>
                   <span>{message.role === "user" ? "你" : "AnswerLens"}</span>
-                  <p>{message.text || "正在查看这份报告的证据…"}</p>
+                  <div>
+                    <RichText>{message.text || "正在查看这份报告的证据…"}</RichText>
+                  </div>
                 </div>
               ))}
             </div>

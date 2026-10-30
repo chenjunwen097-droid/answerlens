@@ -41,31 +41,52 @@ export function LibraryView() {
         </div>
       </header>
 
-      <div className="report-grid">
-        {reports.map((report) => (
-          <button
-            key={report.id}
-            className="report-card"
-            type="button"
-            onClick={() => ws.openReport(report.id)}
-          >
-            <div className="report-card-top">
-              <div>
-                <h3>{report.product || report.brand}</h3>
-                <p>{report.competitors.join(" · ")}</p>
-              </div>
-              <div className="report-score">
-                {report.score}
-                <span>/100</span>
-              </div>
-            </div>
-            <div className="report-card-foot">
-              <span className={`tag ${report.score >= 70 ? "is-ok" : ""}`}>v{report.version}</span>
-              <span className="tag">{report.date}</span>
-            </div>
+      {ws.reportsLoading ? (
+        <div className="library-empty">
+          <p>正在从真实运行时读取报告…</p>
+        </div>
+      ) : ws.reportsError ? (
+        <div className="library-empty">
+          <p>{ws.reportsError}</p>
+          <button className="ghost-btn" type="button" onClick={() => void ws.refreshReports()}>
+            重新读取
           </button>
-        ))}
-      </div>
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="library-empty">
+          <p>{ws.reports.length === 0 ? "还没有检测报告。" : "当前筛选条件下没有报告。"}</p>
+          <button className="primary-btn" type="button" onClick={ws.newConversation}>
+            <Plus />
+            <span>开始第一次检测</span>
+          </button>
+        </div>
+      ) : (
+        <div className="report-grid">
+          {reports.map((report) => (
+            <button
+              key={report.id}
+              className="report-card"
+              type="button"
+              onClick={() => ws.openReport(report.id)}
+            >
+              <div className="report-card-top">
+                <div>
+                  <h3>{report.product || report.brand}</h3>
+                  <p>{report.competitors.join(" · ")}</p>
+                </div>
+                <div className="report-score">
+                  {report.score}
+                  <span>/100</span>
+                </div>
+              </div>
+              <div className="report-card-foot">
+                <span className={`tag ${report.score >= 70 ? "is-ok" : ""}`}>v{report.version}</span>
+                <span className="tag">{report.date}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

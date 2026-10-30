@@ -13,6 +13,8 @@ export interface Brief {
   brand: string;
   product?: string;
   competitors: string[];
+  directions?: string[];
+  other?: string;
   score?: number;
 }
 
@@ -28,7 +30,13 @@ export type RunEvent =
 
 export interface AgentRuntime {
   readonly name: "remote";
-  chat(input: { scope: unknown; message: string; report?: Report | null }): AsyncGenerator<ChatEvent>;
+  listReports(): Promise<Report[]>;
+  chat(input: {
+    scope: unknown;
+    message: string;
+    report?: Report | null;
+    history?: Array<{ role: "user" | "assistant"; text: string }>;
+  }): AsyncGenerator<ChatEvent>;
   run(input: { brief: Brief; reportId: string }): AsyncGenerator<RunEvent>;
 }
 
@@ -74,12 +82,31 @@ class RemoteRuntime implements AgentRuntime {
     }
   }
 
-  async *chat(input: { scope: unknown; message: string; report?: Report | null }): AsyncGenerator<ChatEvent> {
+  async *chat(input: {
+    scope: unknown;
+    message: string;
+    report?: Report | null;
+    history?: Array<{ role: "user" | "assistant"; text: string }>;
+  }): AsyncGenerator<ChatEvent> {
     for await (const frame of this.stream("/v1/chat", input)) {
       if (frame.type === "token") yield { type: "token", text: String(frame.text || "") };
       if (frame.type === "blocks") yield { type: "blocks", blocks: (frame.blocks || []) as ChatBlock[] };
       if (frame.type === "done") yield { type: "done" };
     }
+  }
+
+  async listReports(): Promise<Report[]> {
+    const response = await fetch(`${this.baseUrl}/v1/reports`, {
+      headers: process.env.AGENT_RUNTIME_TOKEN
+        ? { authorization: `Bearer ${process.env.AGENT_RUNTIME_TOKEN}` }
+        : undefined,
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000)
+    });
+    if (!response.ok) throw new Error(`runtime /v1/reports failed: ${response.status}`);
+    const payload = (await response.json()) as { reports?: unknown };
+    if (!Array.isArray(payload.reports)) throw new Error("runtime /v1/reports returned no list");
+    return payload.reports as Report[];
   }
 
   async *run(input: { brief: Brief; reportId: string }): AsyncGenerator<RunEvent> {

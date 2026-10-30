@@ -328,9 +328,21 @@ kbd {
   box-shadow: var(--shadow-sm);
   font-size: 14px;
   line-height: 1.7;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 .msg.is-user .msg-body { border-color: var(--ink); color: var(--white); background: var(--ink); }
+.rich-text { min-width: 0; }
+.rich-text > :first-child { margin-top: 0; }
+.rich-text > :last-child { margin-bottom: 0; }
+.rich-text p { margin: 0 0 0.72em; }
+.rich-text h1, .rich-text h2, .rich-text h3 { margin: 0.9em 0 0.45em; font-size: 1em; line-height: 1.45; }
+.rich-text ul, .rich-text ol { margin: 0.5em 0 0.75em; padding-left: 1.3em; }
+.rich-text li + li { margin-top: 0.25em; }
+.rich-text a { color: var(--orange-dark); text-decoration: underline; text-underline-offset: 2px; }
+.rich-text code { padding: 0.1em 0.35em; border-radius: 4px; background: var(--surface-2); font-size: 0.9em; }
+.rich-text table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
+.rich-text th, .rich-text td { padding: 5px 7px; border: 1px solid var(--line); text-align: left; }
+.msg.is-user .rich-text a { color: #ffd5bd; }
 .msg-time { color: var(--faint); font-size: 10px; }
 .msg-card {
   margin-top: 4px;
@@ -463,6 +475,21 @@ kbd {
 .primary-btn:active { transform: translateY(1px) scale(0.99); }
 
 .report-grid { max-width: 1120px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .library-empty {
+    width: min(1120px, 100%);
+    min-height: 240px;
+    margin: 0 auto;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 16px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 16px;
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.55);
+    text-align: center;
+  }
+  .library-empty p { margin: 0; font-size: 13px; }
 .report-card {
   padding: 16px;
   display: grid; gap: 14px;

@@ -10,6 +10,7 @@ export async function POST(request: Request) {
     threadId?: string;
     scope?: unknown;
     report?: unknown;
+    history?: unknown;
   };
   if (!body.message?.trim()) {
     return Response.json({ error: "message is required" }, { status: 400 });
@@ -25,7 +26,18 @@ export async function POST(request: Request) {
         for await (const event of agent.chat({
           scope: body.scope,
           message: body.message!,
-          report: (body.report as never) ?? null
+          report: (body.report as never) ?? null,
+          history: Array.isArray(body.history)
+            ? body.history
+                .filter(
+                  (item): item is { role: "user" | "assistant"; text: string } =>
+                    Boolean(item) &&
+                    typeof item === "object" &&
+                    ["user", "assistant"].includes(String((item as { role?: unknown }).role)) &&
+                    typeof (item as { text?: unknown }).text === "string"
+                )
+                .slice(-12)
+            : []
         })) {
           send(event);
         }

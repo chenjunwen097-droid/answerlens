@@ -2,142 +2,125 @@
 
 # AnswerLens · AI 推荐情报
 
-**买家先问 AI，再决定买什么。AnswerLens 让你看见 AI 到底怎么理解、比较和推荐你的产品。**
+**看见 AI 如何理解、比较和推荐你的产品。**
 
-[在线体验](https://answerlens-dev.vercel.app) · [工作原理](#工作原理) · [评分口径](#评分口径) · [本地运行](#本地运行) · [自己部署一份](#自己部署一份)
-
-
+[在线体验](https://answerlens-v2.vercel.app) · [架构](#架构) · [本地运行](#本地运行) · [部署](#部署)
 
 </div>
 
----
-
 ## 这是什么
 
-搜索引擎时代你看关键词排名；现在买家把"哪个更好用"直接问给 AI，AI 的回答就成了新的货架。
+买家越来越多地先问 AI，再决定买什么。AnswerLens 用两个真实大模型回答同一组购买决策问题，再逐条判定品牌是否被提及、是否被推荐、推荐顺位、证据和竞品差异，最后生成可追溯到原始回答的报告。
 
-AnswerLens 把这件事变成一次**可复现的检测**：让两个真实大模型回答同一组买家会问的购买决策问题，再逐条判断 AI 有没有推荐你、把你排在第几位、给了你什么定位，最后给出 0–100 的 **AI 推荐表现**分，以及可以直接执行的改进动作。
+- 6 个问题由真实模型根据品牌、产品/型号、竞品和检测方向生成
+- DeepSeek Flash 与 GLM 4.6v 各回答 6 题，共 12 条真实回答
+- DeepSeek Flash 作为固定 judge 逐条判定；分数由确定性代码汇总
+- 报告包含 AI 推荐表现、竞品对比、定位判断和行动建议
+- AnswerLens Copilot 可以读取真实报告、比较报告，并在需要时联网核验
+- 没有 mock 报告、种子数据、虚构分数或虚构来源
 
-- **6 个买家问题**由模型按你的品牌/型号/竞品/检测方向现场生成，可以自己改（每题必须包含你的品牌，至少出现一个竞品）
-- **12 条真实回答**：2 个模型 × 6 个问题，全部保留在报告里，可以逐条查看
-- **逐维判定**：每条回答都给出推荐出现、顺位、倾向、证据、竞品差异的得分和判定依据（引用原句）
-- **完整报告**：AI 推荐表现、竞品对比与排名、定位判断、行动建议（带联网来源）
-- **AnswerLens Copilot**：一个读得懂当前页面和报告的 AI 助手，能直接帮你填表、解释得分、联网查资料
-
-所有数字都来自真实模型调用，没有预设模板；判不了的地方显示 `-`，不编造。
-
-## 工作原理
+## 架构
 
 ```text
-你的输入（品牌 / 型号 / 竞品 / 检测方向 / 其他补充）
+Next.js v2 (Vercel)
+  /api/chat  /api/runs  /api/reports  /api/health
+        │ SSE / JSON proxy
+        ▼
+AnswerLens runtime (Shenzhen ECS)
+  ├── deterministic pipeline: research → questions → 12 answers → judge → report
+  ├── DeepSeek Harness (dsh) agents
+  │     ├── Orchestrator
+  │     ├── Researcher
+  │     └── Report Agent
+  └── SQLite report store (/data)
         │
-        ├─ ① 生成 6 个买家问题        DeepSeek Flash，可人工编辑后再提交
-        │
-        ├─ ② 12 条真实回答            DeepSeek Flash × 6  +  GLM 4.6v × 6
-        │
-        ├─ ③ 逐条判定                 judge 模型逐维度打分并给出理由与原句
-        │
-        └─ ④ 汇总成报告               分数 / 排名 / 定位判断 / 行动建议（附联网来源）
+        └── DeepSeek + GLM + DeepSeek Search
 ```
 
-每一步都在前端实时可视化：你能看到 `1/6 → 2/6 → … → 6/6` 的真实进度，而不是一个转圈的加载图标。
+### Agent 职责
 
-## 评分口径
-
-单题得分 = 各维度得分按权重加权求和；总分 = 被问到题目的加权平均。
-
-| 维度 | 权重 | 判定方式 |
+| 角色 | 可做什么 | 边界 |
 | --- | --- | --- |
-| 推荐出现 | 25% | 逐项判定：是否提到名称、是否给出评价、是否列入推荐清单、是否被列为首选、是否被否定 |
-| 推荐顺位 | 25% | 第 1 名 = 100，之后每降一名 −25；回答没有给出顺序时本项不参与 |
-| 描述倾向 | 15% | 正面 100 / 中立 60 / 混合 40 / 负面 20 |
-| 证据完整 | 20% | 具体主张 ÷（具体主张 + 笼统主张）× 100 |
-| 竞品差异 | 15% | （显式比较 + 相对差异点 + 给出选择条件）÷ 3 × 100 |
+| Orchestrator | 澄清需求、调用检索、把独立任务交给 Researcher 或 Report Agent | 不编造型号，不引用不存在的报告 |
+| Researcher | 只整理搜索与网页读取结果，附来源 | 不写最终建议，不猜事实 |
+| Report Agent | 读取指定报告、比较报告、核验外部事实 | 只引用工具返回的证据；不修改旧版本 |
 
-- 某维度在某道题里无法判定时**不参与加权**，分母按剩余维度重算。
-- 你的品牌每题都会被问到；每个竞品至少出现在 3 题。覆盖 2 题标记「样本偏少」（计分但不参与排名），少于 2 题标记「样本不足」（不显示分数、不参与排名，明细里显示 `-`）。
-- judge 不可用时退化为规则判定，并在报告里明确标注「规则判定」。
+报告是可查询资源，不是每份报告常驻一个 Agent。每次对话请求启动独立 dsh 进程，避免不同用户共享会话状态。
 
-完整口径在产品的「说明」模块里对用户公开，实现见 [api/_lib/judge.js](api/_lib/judge.js)。
+## 评分
 
-## 界面
+| 维度 | 权重 |
+| --- | ---: |
+| 推荐出现 | 25% |
+| 推荐顺位 | 25% |
+| 描述倾向 | 15% |
+| 证据完整 | 20% |
+| 竞品差异 | 15% |
 
-**检测工作台**：品牌、型号、最多 3 个竞品、检测方向、其他补充。型号和检测方向都是选填。
-
-![检测工作台](docs/images/workspace.png)
-
-**定位判断**：一句话定位、两个模型的共识、与竞品的关键差异，以及模型之间的描述冲突。
-
-![定位判断](docs/images/positioning.png)
-
-**行动建议**：左侧是根据报告得出的分析，右侧是具体可执行的建议，每条最多带一个真实外部来源。
-
-![行动建议](docs/images/recommendations.png)
-
-**AnswerLens Copilot**：可操作当前页面（填表、解释得分、检索报告数据、联网搜索），回答用结构化组件渲染。
-
-![AnswerLens Copilot](docs/images/copilot.png)
-
-## 技术栈
-
-| 层 | 选型 | 说明 |
-| --- | --- | --- |
-| 前端 | 原生 HTML / CSS / JavaScript | 零构建、零框架；只 vendored 两个库，lucide（图标）和 anime.js（动效），都是 MIT |
-| 后端 | Vercel Functions（Node，CommonJS） | 无数据库；共享逻辑在 [api/_lib](api/_lib) |
-| 动效 | [`app-motion.js`](app-motion.js) + View Transitions API | 所有时长和缓动集中在一张场景表里，统一尊重 `prefers-reduced-motion` |
-| 被测模型 | DeepSeek Flash、智谱 GLM 4.6v | 两个模型各答 6 题；GLM 同时负责图片识别 |
-| Judge | DeepSeek Flash | temperature 0，逐条判定，输出结构化 JSON |
-| 助手 | DeepSeek Flash | 只读工具 + 页面操作 + 联网搜索 |
-| 搜索 | Serper | 给助手的联网查询和行动建议的来源链接 |
-| 测试 | `node --test` + Playwright | 150 个单元测试 + 全流程视觉冒烟（桌面 / 移动） |
+单题分是可用维度的加权结果，总分是可用题目的平均值。无法判定的维度不进入分母；样本不足会显式标注，不以默认分数补齐。
 
 ## 本地运行
 
 ```bash
-git clone https://github.com/chenjunwen097-droid/answerlens.git
-cd answerlens
+# 1. 安装运行时
+cd runtime
+npm install
 
-npm test              # 150 个单元测试，不需要任何 API key
-npm run test:visual   # 需要先执行 npx playwright install chromium
+# 2. 安装 dsh runtime
+cd dsh
+npm install
+cd ..
+
+# 3. 配置环境变量
+cp .env.example .env
+# 编辑 .env，填写 DEEPSEEK_API_KEY、GLM_API_KEY、RUNTIME_TOKEN、DATA_DIR
+
+# 4. 启动真实运行时
+AGENT_ENGINE=dsh npm start
+
+# 5. 另开终端启动前端
+cd ../v2
+npm install
+# .env.local: AGENT_RUNTIME_URL 和 AGENT_RUNTIME_TOKEN
+npm run dev
 ```
 
-直接双击 `index.html` 也能打开界面并走完整流程——本地是 **mock 模式**，用内置示例数据驱动，不会调用任何模型。真实的模型调用只发生在部署环境（或配置了 `.env.local` 的 serverless 环境）里。
+访问 `http://127.0.0.1:3100`。本地没有离线或演示数据模式；运行时不可用时，产品会明确提示服务不可用。
 
-## 自己部署一份
+## 测试
 
-1. 把仓库导入 [Vercel](https://vercel.com/new)
-2. 按 [.env.example](.env.example) 填环境变量：DeepSeek、智谱 GLM、搜索服务各一个 key
-3. `vercel deploy --prod`
-4. 打开 `/api/health`，三个依赖都显示 ✓ 就说明配置正确（它会真实调用一次每个上游）
+```bash
+cd runtime
+npm test
 
-需要自己申请三个 key：DeepSeek、智谱、Serper。一次完整检测大致是 1 次问题生成 + 12 次回答 + 12 次判定，外加少量后台搜索，成本取决于你选择的模型和各家现价。
+# 额外运行真实模型契约测试
+RUN_DSH_CONTRACT=1 npm test
+
+cd ../v2
+npx tsc --noEmit
+npx vitest run
+npm run build
+npm run smoke
+```
+
+`npm run smoke` 会走完整产品流程并生成一份真实报告。
+
+## 部署
+
+- `v2/` 部署到 Vercel，配置 `AGENT_RUNTIME_URL` 与 `AGENT_RUNTIME_TOKEN`
+- `runtime/` 部署到长期运行的主机，SQLite 数据目录挂载到 `/data`
+- 国内访问需要自有域名或反向代理；`*.vercel.app` 在中国大陆可能被 DNS/SNI 阻断
+- 模型 key 只放本地 `.env` 或托管平台环境变量，绝不提交到仓库
 
 ## 已知限制
 
-这份清单是刻意保留的，部署前请务必读一遍：
+- Vercel Hobby 单个 Function 约 60 秒；完整检测目前仍在限制内，但 dsh 与上游模型波动可能触发超时
+- 两个被测模型会随供应商版本更新而变化，结果适合看趋势，不应视为永久结论
+- judge 与被测模型 DeepSeek Flash 相同，存在自偏好风险；评分理由和原始回答始终公开可查
+- 当前没有账号体系，运行时的报告库是单实例 SQLite
+- 中国大陆访问 Vercel 默认域名可能需要代理
 
-- **额度和限流目前只在前端**：每天 6 次的限制存在浏览器 localStorage 里，`/api/analyze`、`/api/agent` 没有鉴权。公开部署前建议加服务端限流或鉴权，否则别人可以直接调用接口消耗你的模型额度。
-- 对话、报告快照和额度都保存在浏览器本地，没有账号体系，清缓存或换设备就没了。
-- 只调用两个模型，结果会随模型版本变化，适合看趋势，不适合当成一次性绝对结论。
-- judge 与其中一个被测模型是同一个（DeepSeek Flash），存在自偏好风险；换成独立 judge 只需要改环境变量。
-- 图片附件不进入对话历史。
-- 自建 SearXNG 在数据中心 IP 上会被搜索引擎验证码拦截，所以默认改用 Serper（相关配置仍保留在 `api/_lib/research.js` 中作为回退）。
-
-## Roadmap
-
-- [ ] 账号体系与跨设备报告（Supabase + Postgres）
-- [ ] 可分享的报告链接
-- [ ] 服务端配额与限流
-- [ ] 支持更多被测模型 / 用户自带模型
-- [ ] judge 与被测模型解耦，并用人工标注样本校准
-
-详细的技术实现方案（架构、数据模型、逐页规格、里程碑与验收标准）见 [docs/technical-plan.md](docs/technical-plan.md)。
-
-## 贡献
-
-欢迎 PR。提交前请先读 [CONTRIBUTING.md](CONTRIBUTING.md)——本项目要求贡献者同意 CLA。
-
-## 许可证
+## 许可
 
 [MIT](LICENSE) © 2026 chenjunwen097-droid
 
@@ -145,42 +128,8 @@ npm run test:visual   # 需要先执行 npx playwright install chromium
 
 ## English
 
-**AnswerLens** asks two real LLMs the same six buyer-decision questions about your product and your competitors, judges every answer dimension by dimension, and turns the result into a 0–100 "AI recommendation performance" score plus concrete actions.
+AnswerLens shows how real LLMs understand, compare and recommend a product. Six buyer questions are generated from the user's brand, product, competitors and directions; DeepSeek Flash and GLM 4.6v answer all six; a fixed DeepSeek Flash judge evaluates each answer; deterministic code builds the final score and report.
 
-- **6 generated buyer questions** (editable; every question must mention your brand)
-- **12 real answers** — DeepSeek Flash × 6 and Zhipu GLM 4.6v × 6, all shown in the report
-- **Per-answer verdicts** for recommendation presence, rank, tone, evidence quality and competitor differentiation, each with the quoted sentence it was judged from
-- **Report**: score, competitor comparison and ranking, positioning diagnosis, action items with real sources
-- **AnswerLens Copilot**: a page-aware assistant that fills the form, explains scores and searches the web
+The product uses a Next.js frontend on Vercel and a long-lived runtime on ECS with SQLite. DeepSeek Harness runs three bounded roles: Orchestrator, Researcher and Report Agent. Reports are resources rather than always-on agents, and each chat request uses an isolated dsh process.
 
-### Quick start
-
-```bash
-git clone https://github.com/chenjunwen097-droid/answerlens.git
-cd answerlens
-
-npm test              # 150 unit tests, no API keys required
-npm run test:visual   # run `npx playwright install chromium` first
-```
-
-Open `index.html` directly to click through the product in mock mode. Real model calls happen inside the deployed serverless functions: copy `.env.example` to `.env.local`, add DeepSeek / Zhipu GLM / Serper keys, deploy to Vercel, then check `/api/health`.
-
-### How it works
-
-Questions → 12 real answers → per-answer judging (temperature 0, structured JSON) → report. Nothing is pre-generated: every number in the report traces back to a model answer, and anything that cannot be judged is shown as `-` instead of a made-up value.
-
-### Motion
-
-Every animation lives in [`app-motion.js`](app-motion.js): anime.js drives the staggered reveals, numbers are tweened on `requestAnimationFrame`, module switches use the View Transitions API, and `prefers-reduced-motion` turns all of it off from one place.
-
-### Known limitations
-
-Quota and rate limiting are client-side only — add server-side limits before exposing your deployment publicly. Conversations and reports live in `localStorage`. The judge is currently the same model as one of the tested models, which carries a self-preference risk.
-
-MIT licensed. Contributions require a CLA — see [CONTRIBUTING.md](CONTRIBUTING.md).
-
----
-
-<div align="center">
-<sub>AnswerLens is not affiliated with DeepSeek, Zhipu AI or Serper.</sub>
-</div>
+There is no mock report path. Scores, quotes and recommendations must trace back to real model answers or real search results. The MIT-licensed repository is maintained by [chenjunwen097-droid](https://github.com/chenjunwen097-droid).

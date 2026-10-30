@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { buildReport, parseBrief, seedReports } from "@/lib/data";
+import { parseReportsPayload } from "@/lib/reports";
 import { STAGES, type Brief } from "@/lib/runtime";
 import type { ArtifactState, ChatBlock, ChatMessage, Report, Scope } from "@/lib/types";
 
@@ -15,13 +15,15 @@ interface WorkspaceValue {
   artifact: ArtifactState;
   running: boolean;
   stageIndex: number;
+  reportsLoading: boolean;
+  reportsError: string | null;
   activeReport: Report | null;
-  pendingBrief: Brief | null;
   draft: string;
   setDraft: (value: string) => void;
   paletteOpen: boolean;
   send: (text: string) => Promise<void>;
   startRun: (brief: Brief) => Promise<void>;
+  refreshReports: () => Promise<void>;
   openReport: (id: string) => void;
   openLibrary: () => void;
   newConversation: () => void;
@@ -65,27 +67,47 @@ const uid = () => (globalThis.crypto?.randomUUID?.() ?? `m_${Date.now()}_${Math.
 export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [reports, setReports] = useState<Report[]>(seedReports);
+  const [reports, setReports] = useState<Report[]>([]);
   const [threads, setThreads] = useState<Record<string, ChatMessage[]>>({ conversation: [] });
   const [scope, setScope] = useState<Scope>({ type: "conversation" });
   const [artifact, setArtifact] = useState<ArtifactState>({ open: false, mode: "steps", title: "分析进度" });
   const [running, setRunning] = useState(false);
   const [stageIndex, setStageIndex] = useState(-1);
+  const [reportsLoading, setReportsLoading] = useState(true);
+  const [reportsError, setReportsError] = useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [pendingBrief, setPendingBrief] = useState<Brief | null>(null);
   const [draft, setDraft] = useState("");
   const hydrated = useRef(false);
+
+  const refreshReports = useCallback(async () => {
+    setReportsLoading(true);
+    setReportsError(null);
+    try {
+      const response = await fetch("/api/reports", { cache: "no-store" });
+      const payload = (await response.json()) as unknown;
+      if (!response.ok) {
+        const message =
+          payload && typeof payload === "object" && "error" in payload
+            ? String((payload as { error?: unknown }).error)
+            : `报告库请求失败（${response.status}）`;
+        throw new Error(message);
+      }
+      setReports(parseReportsPayload(payload));
+    } catch (error) {
+      setReportsError((error as Error).message);
+    } finally {
+      setReportsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const saved = JSON.parse(raw) as {
-          reports?: Report[];
           threads?: Record<string, ChatMessage[]>;
           messages?: ChatMessage[];
         };
-        if (saved.reports?.length) setReports(saved.reports);
         if (saved.threads) setThreads(saved.threads);
         else if (saved.messages?.length) setThreads({ conversation: saved.messages });
       }
@@ -93,12 +115,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       /* ignore corrupt local state */
     }
     hydrated.current = true;
-  }, []);
+    void refreshReports();
+  }, [refreshReports]);
 
   useEffect(() => {
     if (!hydrated.current) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ reports, threads }));
-  }, [reports, threads]);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ threads }));
+  }, [threads]);
 
   useEffect(() => {
     const match = pathname?.match(/^\/reports\/([^/]+)/);
@@ -170,11 +193,13 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
       const key = scope.type === "report" ? `report:${scope.reportId}` : "conversation";
       const userMessage: ChatMessage = { id: uid(), role: "user", text: value, createdAt: now() };
       const assistantId = uid();
+      const history = messages.slice(-12).map((message) => ({
+        role: message.role,
+        text: message.text
+      }));
       appendMessage(key, userMessage);
       if (scope.type === "report") {
         setArtifact({ open: true, mode: "chat", title: "报告对话" });
-      } else {
-        setPendingBrief(parseBrief(value));
       }
       appendMessage(key, { id: assistantId, role: "assistant", text: "", createdAt: now() });
 
@@ -185,7 +210,8 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           body: JSON.stringify({
             message: value,
             scope,
-            report: activeReport
+            report: activeReport,
+            history
           })
         });
         await readSse(response, (event) => {
@@ -209,7 +235,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         }));
       }
     },
-    [activeReport, appendMessage, running, scope, updateMessage]
+    [activeReport, appendMessage, messages, running, scope, updateMessage]
   );
 
   const startRun = useCallback(
@@ -229,13 +255,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
           if (event.type === "stage") setStageIndex(Number(event.index));
           if (event.type === "report") {
             const incoming = event.report as Report;
-            const same = reports.filter(
-              (item) => item.brand === incoming.brand && item.product === incoming.product
-            );
-            result.report = {
-              ...incoming,
-              version: same.length ? Math.max(...same.map((item) => item.version)) + 1 : 1
-            };
+            result.report = incoming;
             setReports((current) => [result.report!, ...current]);
             setScope({ type: "report", reportId: result.report!.id });
             setArtifact({ open: true, mode: "report", title: "报告摘要" });
@@ -262,7 +282,7 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
         setRunning(false);
       }
     },
-    [appendMessage, reports, router, running]
+    [appendMessage, router, running]
   );
 
   const value: WorkspaceValue = {
@@ -272,13 +292,15 @@ export function WorkspaceProvider({ children }: { children: React.ReactNode }) {
     artifact,
     running,
     stageIndex,
+    reportsLoading,
+    reportsError,
     activeReport,
-    pendingBrief,
     draft,
     setDraft,
     paletteOpen,
     send,
     startRun,
+    refreshReports,
     openReport,
     openLibrary,
     newConversation,

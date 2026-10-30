@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Download, RefreshCw, X } from "lucide-react";
+import { RichText } from "./rich-text";
 import { useWorkspace } from "./workspace";
 
 export function ReportView() {
@@ -37,10 +38,18 @@ export function ReportView() {
     };
   }, [report]);
 
+  if (ws.reportsLoading) {
+    return (
+      <section className="report-view">
+        <p className="lede">正在从真实运行时读取报告…</p>
+      </section>
+    );
+  }
+
   if (!report) {
     return (
       <section className="report-view">
-        <p className="lede">这份报告不存在，或者已经被删除。</p>
+        <p className="lede">{ws.reportsError || "这份报告不存在，或者已经被删除。"}</p>
         <button className="primary-btn" type="button" onClick={ws.openLibrary}>
           返回报告库
         </button>
@@ -207,11 +216,11 @@ export function ReportView() {
                 <div className="detail-body">
                   <div className="answer">
                     <b>DeepSeek Flash</b>
-                    {question.deepseek}
+                    <RichText>{question.deepseek}</RichText>
                   </div>
                   <div className="answer">
                     <b>GLM 4.6v</b>
-                    {question.glm}
+                    <RichText>{question.glm}</RichText>
                   </div>
                 </div>
               </details>

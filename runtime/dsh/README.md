@@ -1,47 +1,94 @@
-# dsh (DeepSeek Harness) integration — M3.1
+# DeepSeek Harness integration
 
-Verified against `@deepseek-ai/dsh@0.2.1-rc.2` on 2026-10-29.
+AnswerLens uses `@deepseek-ai/dsh@0.2.1-rc.2` for the conversational agent layer.
+The deterministic analysis pipeline stays separate: dsh does not generate or
+alter scores.
 
-## What the SDK profile is
+## Runtime shape
 
-`dsh --profile sdk` serves **newline-delimited JSON-RPC over stdio** for one
-runtime until the client disconnects. `dsh --profile sdk --dump-config` prints
-the composed plugin tree (`@deepseek-ai/dsh-base` + `@deepseek-ai/dsh-sdk-app`
-patches). The model, provider and cwd arrive in the SDK initialization request.
+```text
+POST /v1/chat
+  └── runtime/dsh/client.mjs
+        └── one isolated dsh stdio process
+              ├── sdk-minimal profile
+              ├── answerlens-dsh-runtime/patch.yml
+              └── orchestrator | researcher | report-agent preset
+```
 
-## What dsh already provides
+Each chat request starts its own dsh process and session. This prevents users
+from sharing in-memory agent state. The process is closed after the answer is
+committed.
 
-- `@deepseek-ai/dsh-tool-web` → `web_search` / `web_fetch` (`ctx.web` backends)
-- `@deepseek-ai/dsh-tool-subagent` → managed child agents with presets and a
-  delegation depth limit
-- `@deepseek-ai/dsh-tools` → `defineTool(...)` for registering a model-facing tool
-- `@deepseek-ai/dsh-tool-present` → deliverables
+## Roles
 
-So the multi-agent work is mostly **composition**, not new plumbing.
+- `orchestrator`: default chat scope. Can search the web, discover reports,
+  prepare an analysis card, and delegate independent work.
+- `researcher`: temporary child agent with web-only tools and a small search
+  budget. It returns sourced facts, not final recommendations.
+- `report-agent`: selected deterministically when the request has a report
+  context. It can read and compare stored reports and perform a small web
+  verification when required.
 
-## Plan
+Reports remain resources. There is one logical Report Agent parameterized by
+`reportId`; report count does not create idle agents.
 
-1. `answerlens-report-tools` Cordis plugin: register `get_report` and
-   `compare_reports` over the runtime SQLite store with `defineTool`.
-2. Agent presets:
-   - `orchestrator`: `dsh-tool-web` + `dsh-tool-subagent` + report tools
-   - `researcher`: `dsh-tool-web` only, low search budget
-   - `report-agent`: report tools + `dsh-tool-web` (2 searches)
-3. A profile patch that mounts the plugin and presets into `sdk`.
-4. A stdio JSON-RPC client in the runtime: spawn `dsh --profile sdk`,
-   initialize (provider/model/cwd), send the user message, map dsh events to the
-   existing `/v1/chat` SSE frames.
-5. Contract tests: same prompts through the current agent layer and through dsh;
-   compare tool calls, latency and final text.
+## Tools
 
-## Status
+Local Cordis plugin in `plugins/report-tools.mjs`:
 
-- [x] dsh installed and CLI verified locally
-- [x] SDK profile dumped; built-in web/subagent tools identified
-- [ ] report-tools plugin
-- [ ] presets + profile patch
-- [ ] stdio client + SSE mapping
-- [ ] contract tests + deploy
+- `list_reports`
+- `get_report`
+- `compare_reports`
 
-The current production runtime (0.4.0) keeps using `runtime/agents.mjs`; it is
-not replaced until the dsh path passes the contract tests.
+Built-in dsh tools:
+
+- `web_search`
+- `web_fetch`
+- `subagent` with preset allowlist
+
+`plugins/analysis-tool.mjs` exposes `prepare_analysis`. The runtime applies an
+additional verbatim-source check, so the UI only receives a detection card when
+the brand, competitors and directions appear in the user's message.
+
+## Configuration
+
+`patch.yml` is loaded over `sdk-minimal`. It disables shell and filesystem tools,
+enables DeepSeek Search/Fetch, mounts the three presets, and installs a binder
+that selects the preset before the first turn.
+
+The profile home must be inside `runtime/dsh` so Node can resolve the local
+`@answerlens/dsh-plugins` package. Every request gets a unique
+`runtime/dsh/.runtime-home/request-*` home, which is removed after the dsh
+process closes. This prevents concurrent users from sharing profile locks or
+session state.
+
+Required environment:
+
+```text
+DEEPSEEK_API_KEY=
+DATA_DIR=/data
+DSH_MODEL=deepseek-flash
+DSH_MAX_TOKENS=1800
+AGENT_ENGINE=dsh
+```
+
+Reasoning is configured as `off` for the assistant runtime. This keeps latency
+and output-token use predictable; it does not affect the measured models in the
+analysis pipeline.
+
+## Verification
+
+Unit tests validate source-grounded brief extraction and context composition:
+
+```bash
+npm test
+```
+
+Real-model contract tests additionally verify the Orchestrator and Report Agent:
+
+```bash
+RUN_DSH_CONTRACT=1 npm test
+```
+
+The report-agent contract writes a temporary SQLite report and requires the
+answer to come back through the real dsh report tools.
